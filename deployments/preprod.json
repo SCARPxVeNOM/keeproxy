@@ -1,0 +1,23 @@
+{
+  "network": "preprod",
+  "contractAddress": "79b8e4659d4fb04716a3f74cd318001e4bc537e07c0be904a810c00f8ffb7a4a",
+  "deployTx": "00c6d34db4774133d8ddda549031e5902d2f026076d85596cfacf67f1795c3f604",
+  "verifierKeyInserts": [
+    "revokeMandates",
+    "agentPay",
+    "openRecovery",
+    "approveRecovery",
+    "finalizeRecovery",
+    "anchorBackup",
+    "releaseShare",
+    "triggerInheritance",
+    "claimInheritance"
+  ],
+  "rules": {
+    "threshold": "2",
+    "inactivitySeconds": "15552000",
+    "vetoSeconds": "259200"
+  },
+  "compactc": "0.36.1",
+  "deployedAt": "2026-11-19T22:21:45.347Z"
+}

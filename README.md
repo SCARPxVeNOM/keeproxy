@@ -257,6 +257,10 @@ Tools: `vault_status`, `pay`, `request_limit_raise`. The agent can only pay unde
 
 Copy `.env.preprod.example` to `.env.preprod`, add a Blockfrost project ID and a wallet funded from the faucet, then run `MIDNIGHT_NETWORK=preprod npm run deploy`. The address lands in `deployments/preprod.json`.
 
+**Live on preprod:** [`79b8e465…7a4a`](deployments/preprod.json) (deploy and 9 verifier-key transactions), watched at [keeproxy.vercel.app/#/console](https://keeproxy.vercel.app/#/console).
+
+A new wallet's first preprod sync replays the chain's shielded and DUST events (about 2 million of each). The DUST sync starts at the ledger-9 boundary ([src/dust-boundary.ts](src/dust-boundary.ts)), because the SDK's own search for that boundary comes back empty against Blockfrost. Progress is checkpointed to `.wallet-state/` every five minutes, so an interrupted sync resumes; a first sync takes about an hour and a half.
+
 ### Hosted watch mode
 
 | Piece | Where | Holds |

@@ -60,6 +60,8 @@ import {
   logger as testkitLogger,
 } from '@midnight-ntwrk/testkit-js';
 import * as Rx from 'rxjs';
+import { Option } from 'effect';
+import { dustStart } from './dust-boundary.js';
 import type { Logger } from 'pino';
 
 // A proven, not yet bound ledger 9 transaction: what a contract call or deploy
@@ -246,7 +248,7 @@ export class MidnightWalletProvider implements Ledger9WalletProvider {
         ? base.withMnemonic(secret.value)
         : base.withSeed(secret.value);
 
-    skipLedgerV8DustHistory(builder);
+    skipLedgerV8DustHistory(builder, env);
 
     const built = await builder.buildWithoutStarting();
     const { seeds, keystore } = built;
@@ -278,14 +280,25 @@ export async function syncWallet(
 ): Promise<FacadeState> {
   logger.info('Syncing wallet...');
   let emissionCount = 0;
+  let latest: FacadeState | undefined;
+  const at = (p: unknown) => String((p as { appliedIndex?: bigint } | undefined)?.appliedIndex ?? '?');
+  // A first sync on preprod takes hours: say where it is once a minute, and
+  // save it every five so a crash or reboot resumes instead of starting over.
+  const report = setInterval(() => {
+    if (latest) logger.info(`Wallet sync position: shielded ${at(latest.shielded.progress)}, dust ${at(latest.dust.progress)}`);
+  }, 60_000);
+  const checkpoint = setInterval(() => {
+    saveWalletState(logger, wallet).catch((e: unknown) => logger.warn(`checkpoint failed: ${String(e)}`));
+  }, 300_000);
   const state = await Rx.firstValueFrom(
     wallet.state().pipe(
       Rx.tap((state: FacadeState) => {
         emissionCount++;
+        latest = state;
         const shielded = isProgressStrictlyComplete(state.shielded.progress);
         const unshielded = isProgressStrictlyComplete(state.unshielded.progress);
         const dust = isProgressStrictlyComplete(state.dust.progress);
-        logger.info(
+        logger.debug(
           `Wallet sync [${emissionCount}]: shielded=${shielded}, unshielded=${unshielded}, dust=${dust}`,
         );
         if (!shielded) {
@@ -298,6 +311,16 @@ export async function syncWallet(
           logger.debug(`  dust.progress: ${JSON.stringify(state.dust.progress)}`);
         }
       }),
+      // A stall timeout: it fails only when the wallet stops reporting progress.
+      // Placed after the filter it would cap the whole sync, which on preprod
+      // runs for hours while advancing every second.
+      Rx.timeout({
+        each: timeout,
+        with: () =>
+          Rx.throwError(
+            () => new Error(`Wallet sync stalled: no progress for ${timeout}ms (${emissionCount} emissions received)`),
+          ),
+      }),
       Rx.filter(
         (state: FacadeState) =>
           isProgressStrictlyComplete(state.shielded.progress) &&
@@ -305,16 +328,13 @@ export async function syncWallet(
           isProgressStrictlyComplete(state.unshielded.progress),
       ),
       Rx.tap(() => logger.info(`Wallet sync complete after ${emissionCount} emissions`)),
-      Rx.timeout({
-        each: timeout,
-        with: () =>
-          Rx.throwError(
-            () => new Error(`Wallet sync timeout after ${timeout}ms (${emissionCount} emissions received)`),
-          ),
-      }),
       Rx.catchError((err) => {
         logger.error(`Wallet sync error: ${err}`);
         return Rx.throwError(() => err);
+      }),
+      Rx.finalize(() => {
+        clearInterval(report);
+        clearInterval(checkpoint);
       }),
     ),
   );
@@ -343,7 +363,8 @@ export async function syncWallet(
 // replaces the file. A version 1 file (from before stamping) is restored as
 // before and gets its stamp on the next save.
 
-const STATE_DIR = fileURLToPath(new URL('../../../.wallet-state/', import.meta.url));
+// The repo root's .wallet-state/ (gitignored); src/ is one level down.
+const STATE_DIR = fileURLToPath(new URL('../.wallet-state/', import.meta.url));
 const stateFiles = new WeakMap<WalletFacade, { file: string; indexer: string }>();
 
 type SubWalletStates = { shielded: string; unshielded: string; dust: string };
@@ -408,9 +429,20 @@ function stateFileFor(networkId: string, masterSeed: string): string | undefined
  * and on a chain that never crossed the fork it changes nothing. The cost is
  * the wallet's Ledger 8 DUST transaction history, which the examples don't use.
  * testkit's builder keeps its wallet configuration private, so it is set there.
+ *
+ * The SDK's own search for the fork comes back empty against Blockfrost, and
+ * the wallet then silently replays everything (days on preprod). So the probe
+ * it would build is replaced with ours (src/dust-boundary.ts), which the SDK
+ * keeps when `skipLedgerV8DustHistory` is off. On a local devnet, born on
+ * ledger 9, there is nothing to skip.
  */
-function skipLedgerV8DustHistory(builder: FluentWalletBuilder): void {
-  (builder as unknown as { config: { skipLedgerV8DustHistory?: boolean } }).config.skipLedgerV8DustHistory = true;
+function skipLedgerV8DustHistory(builder: FluentWalletBuilder, env: EnvironmentConfiguration): void {
+  const config = (builder as unknown as { config: Record<string, unknown> }).config;
+  config['skipLedgerV8DustHistory'] = false;
+  config['dustTimelineStartProbe'] = async () => {
+    const start = await dustStart(env.networkId, env.indexerWS);
+    return start ? Option.some(start) : Option.none();
+  };
 }
 
 /** The three sub-wallets restored from a snapshot, configured as testkit's WalletFactory configures new ones. */
