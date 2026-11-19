@@ -59,7 +59,7 @@ server.registerTool(
         `Vault ${s.chain.address} is ${s.chain.phase}, holding ${s.chain.balance} NIGHT.`,
         `My mandate: up to ${m.capPerEpoch} NIGHT per ${Number(m.epochSeconds) / 86400}-day epoch, ` +
           `expires ${new Date(m.expiresAt * 1000).toISOString()}.`,
-        current ? 'The mandate is current.' : 'The owner has revoked my mandate (kill switch).',
+        current ? 'The mandate is current.' : 'My mandate is no longer current: the owner used the kill switch, or a recovery or inheritance revoked it.',
         'I can only pay recipients on my private allowlist; the contract checks the cap, the allowlist and the expiry in zero knowledge.',
       ].join('\n'),
     );

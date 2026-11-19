@@ -133,7 +133,7 @@ export function Console() {
 
   const create = async () => {
     setPending('create-vault');
-    const r = await post<{ ok: boolean; error?: string }>('/api/vault', { threshold: 2, inactivity: 600, veto: 60 });
+    const r = await post<{ ok: boolean; error?: string }>('/api/vault', { threshold: 2, inactivity: 600, veto: 180 });
     setPending(null);
     setToast(r.ok ? { ok: true, text: 'Vault ready' } : { ok: false, text: r.error ?? 'failed' });
     void refresh();
@@ -197,11 +197,27 @@ export function Console() {
                 <div className="pixel" style={{ fontSize: 28, color: '#fff' }}>Deploy a vault<span className="dot">.</span></div>
                 <p className="muted" style={{ maxWidth: 460, margin: '10px auto 20px' }}>
                   Staged deploy (constructor + 13 verifier keys across 10 transactions), then 3 guardians, 2 heirs, one agent
-                  mandate, one payee and a 1000 NIGHT deposit. Demo timers: 10 min inactivity, 60 s veto.
+                  mandate, one payee and a 1000 NIGHT deposit. Demo timers: 10 min inactivity, 3 min veto.
                 </p>
                 <button className="btn btn-primary" disabled={busy} onClick={create}>
-                  {pending === 'create-vault' ? <span className="spinner" /> : null} Deploy vault <Icon.arrow />
+                  {pending === 'create-vault' || st.busy ? <span className="spinner" /> : null} Deploy vault <Icon.arrow />
                 </button>
+                {events.length > 0 && (
+                  <div className="events" ref={evRef} style={{ textAlign: 'left', maxWidth: 560, margin: '26px auto 0' }}>
+                    {events.slice(-14).map((e, i) => (
+                      <div className="event" key={i}>
+                        <span className="dim">{hms(e.at)}</span>
+                        <span className={e.kind === 'tx' ? 'lvl-OK' : e.kind === 'progress' ? 'lvl-PROOF' : e.kind === 'refused' ? 'lvl-REFUSED' : 'lvl-INFO'}>
+                          {e.kind === 'tx' ? 'OK' : e.kind.toUpperCase()}
+                        </span>
+                        <span className="muted">
+                          {e.circuit && <span className="p">{e.circuit} </span>}
+                          {e.message}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </Panel>
           )}

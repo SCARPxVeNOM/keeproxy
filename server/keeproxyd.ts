@@ -47,7 +47,10 @@ function serveStatic(req: IncomingMessage, res: ServerResponse) {
   if (!file.startsWith(WEB_DIST)) return json(res, 403, { error: 'forbidden' });
   if (!existsSync(file) || statSync(file).isDirectory()) file = path.join(WEB_DIST, 'index.html');
   if (!existsSync(file)) return json(res, 404, { error: 'web app not built: npm run build:web' });
-  res.writeHead(200, { 'content-type': MIME[path.extname(file)] ?? 'application/octet-stream' });
+  res.writeHead(200, {
+    'content-type': MIME[path.extname(file)] ?? 'application/octet-stream',
+    'cache-control': file.endsWith('index.html') ? 'no-cache' : 'public, max-age=3600',
+  });
   res.end(readFileSync(file));
 }
 
@@ -83,7 +86,7 @@ const server = createServer(async (req, res) => {
       const r = await svc.createVault({
         threshold: BigInt(String(b['threshold'] ?? 2)),
         inactivity: BigInt(String(b['inactivity'] ?? 600)),
-        veto: BigInt(String(b['veto'] ?? 60)),
+        veto: BigInt(String(b['veto'] ?? 180)),
       });
       return json(res, r.ok ? 200 : 400, r);
     }

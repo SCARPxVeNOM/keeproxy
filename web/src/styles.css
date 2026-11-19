@@ -317,3 +317,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* icons inside panel titles, and long hashes in the event log */
+.panel-head > span { display: inline-flex; align-items: center; gap: 7px; }
+.panel-head svg { width: 12px; height: 12px; color: var(--primary); flex: none; }
+.event > span:last-child { overflow-wrap: anywhere; }
+.events { overflow-x: hidden; }

@@ -123,11 +123,16 @@ const de = (m: VaultFile['mandate']): Mandate => ({
 
 /** Short, human error text from a rejected circuit or a failed submission. */
 export function reason(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  const m = /failed assert: ([^\n]+)/.exec(msg) ?? /Error: ([^\n]+is not enrolled[^\n]*)/.exec(msg);
+  // midnight-js wraps witness/assert failures; the useful text is in the cause chain.
+  const parts: string[] = [];
+  for (let cur: unknown = e, i = 0; cur && i < 8; i++) {
+    parts.push(cur instanceof Error ? cur.message : String(cur));
+    cur = cur instanceof Error ? (cur as Error & { cause?: unknown }).cause : undefined;
+  }
+  const msg = parts.join('\n');
+  const m = /failed assert: ([^\n]+)/.exec(msg) ?? /((?:Guardian|Heir|Mandate|Recipient) is not enrolled in this vault|This device holds no [^\n]+)/.exec(msg);
   if (m) return m[1]!.trim();
-  if (/is not enrolled in this vault|This device holds no/.test(msg)) return msg.split('\n')[0]!;
-  return msg.split('\n')[0]!.slice(0, 240);
+  return parts[0]!.split('\n')[0]!.slice(0, 240);
 }
 
 export class VaultService extends EventEmitter {
@@ -271,7 +276,7 @@ export class VaultService extends EventEmitter {
   // -------------------------------------------------------------- create ----
 
   /** Deploys a fresh vault and sets up every role. Takes a few minutes: ~20 transactions. */
-  createVault(timers = { threshold: 2n, inactivity: 600n, veto: 60n }): Promise<ActResult> {
+  createVault(timers = { threshold: 2n, inactivity: 600n, veto: 180n }): Promise<ActResult> {
     return this.serial('create-vault', async () => {
       const owner = bytes32();
       const vaultId = bytes32();
