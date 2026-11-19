@@ -23,7 +23,8 @@
     "build:web": "npm run build -w web",
     "serve": "vite-node server/keeproxyd.ts",
     "agent:mcp": "vite-node agent/mcp-server.ts",
-    "agent": "vite-node agent/demo-agent.ts"
+    "agent": "vite-node agent/demo-agent.ts",
+    "setup:compactc": "bash scripts/setup-compactc.sh"
   },
   "dependencies": {
     "@midnight-ntwrk/midnight-js-contracts": "5.0.1",

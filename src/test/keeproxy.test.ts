@@ -49,8 +49,8 @@ const nowSec = () => BigInt(Math.floor(Date.now() / 1000) - 30);
 
 // Short timers so the devnet run can wait them out.
 const THRESHOLD = 2n;
-const INACTIVITY = 150n; // seconds
-const VETO = 40n; // seconds
+const INACTIVITY = 330n; // seconds
+const VETO = 180n; // seconds: longer than proving the two approvals takes
 
 const ID = {
   owner: 'owner-laptop',
