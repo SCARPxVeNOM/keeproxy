@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Footer, Header, Icon, Panel } from '../components/ui';
+import { Footer, Header, Icon, Panel, REPO } from '../components/ui';
+
+/** keeproxyd only ever runs locally; anywhere else the console explains how to start it. */
+const LOCAL = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
 
 // The console drives a real vault through keeproxyd (npm run serve). Every
 // button runs as exactly one device; refusals come straight from the
@@ -290,6 +293,7 @@ export function Console() {
 
   useEffect(() => {
     void refresh();
+    if (!LOCAL) return;
     const id = setInterval(refresh, 5000);
     const tick = setInterval(() => setClock(Math.floor(Date.now() / 1000)), 1000);
     const es = new EventSource('/api/events');
@@ -408,7 +412,36 @@ export function Console() {
             </div>
           </div>
 
-          {offline && (
+          {offline && !LOCAL && (
+            <Panel title="run it yourself" center className="reveal">
+              <div className="empty hosted">
+                <div className="orbit" aria-hidden>
+                  <i /><i /><i />
+                  <Icon.terminal />
+                </div>
+                <div className="pixel" style={{ fontSize: 26, color: '#fff' }}>The console runs on your machine<span className="dot">.</span></div>
+                <p className="muted" style={{ maxWidth: 520, margin: '10px auto 22px' }}>
+                  It drives a real Midnight network with real zero-knowledge proofs, and holds a demo secret for every
+                  device, so it is never hosted publicly. Four commands start a local node, indexer and proof server, then
+                  this console at <span className="inline-code">127.0.0.1:8787</span>.
+                </p>
+                <div className="code setup">
+{`git clone ${REPO}.git && cd keeproxy
+npm install && bash scripts/setup-compactc.sh
+npm run compile && npm run env:up
+npm run build:web && npm run serve`}
+                </div>
+                <div className="cta-row" style={{ marginTop: 22 }}>
+                  <a className="btn btn-primary" href={REPO} target="_blank" rel="noreferrer">
+                    <Icon.github /> Open the repo
+                  </a>
+                  <a className="btn btn-outline" href="#/">Back to overview</a>
+                </div>
+              </div>
+            </Panel>
+          )}
+
+          {offline && LOCAL && (
             <Panel title="keeproxyd" center className="reveal">
               <div className="empty">
                 <div className="pixel" style={{ fontSize: 26, color: '#fff' }}>Console offline<span className="dot">.</span></div>

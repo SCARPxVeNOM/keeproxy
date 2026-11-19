@@ -12,6 +12,8 @@ within limits a zero-knowledge contract enforces, without the chain ever learnin
 [![Compact](https://img.shields.io/badge/Compact-0.36.1-1971c2.svg)](contract/proxy.compact)
 [![Tests](https://img.shields.io/badge/tests-85%20in--memory%20%C2%B7%208%20devnet-2f9e44.svg)](#testing)
 
+**[keeproxy.vercel.app](https://keeproxy.vercel.app)**
+
 [Overview](#overview) ·
 [Architecture](#architecture) ·
 [Flows](#flows) ·
