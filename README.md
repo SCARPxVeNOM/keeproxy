@@ -257,6 +257,23 @@ Tools: `vault_status`, `pay`, `request_limit_raise`. The agent can only pay unde
 
 Copy `.env.preprod.example` to `.env.preprod`, add a Blockfrost project ID and a wallet funded from the faucet, then run `MIDNIGHT_NETWORK=preprod npm run deploy`. The address lands in `deployments/preprod.json`.
 
+### Hosted watch mode
+
+| Piece | Where | Holds |
+|---|---|---|
+| Website and console UI | Vercel ([keeproxy.vercel.app](https://keeproxy.vercel.app), root `web/`) | nothing |
+| `keeproxy-viewer` ([server/viewer.ts](server/viewer.ts)) | Railway | no keys, no wallet, no private state |
+
+The hosted console cannot act. It shows a live vault read from the indexer: what the chain sees, every call in its history, and a receipt with the proof for each one. All actions still run on the devices that hold the secrets: `keeproxyd` locally, or the MCP agent. The viewer answers every write with `405`.
+
+```bash
+npm run compile:fast && bash scripts/stage-viewer.sh
+cd .deploy/viewer && railway up            # Dockerfile + railway.json
+railway variables --set MIDNIGHT_NETWORK=preprod --set BLOCKFROST_PROJECT_ID=… --set KEEPROXY_ADDRESS=<contract>
+```
+
+The web build reads the viewer's URL from `VITE_KEEPROXY_API`. The Blockfrost project ID is stripped from everything the viewer returns. Until `KEEPROXY_ADDRESS` is set, the hosted console shows the run-it-yourself steps.
+
 ## Testing
 
 | Suite | Command | Tests | What it covers |

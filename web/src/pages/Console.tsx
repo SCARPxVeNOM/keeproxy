@@ -3,6 +3,9 @@ import { Footer, Header, Icon, Panel, REPO } from '../components/ui';
 
 /** keeproxyd only ever runs locally; anywhere else the console explains how to start it. */
 const LOCAL = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
+/** Hosted builds may point at the watch-only viewer (server/viewer.ts): public chain data, no keys. */
+const API = LOCAL ? '' : ((import.meta.env.VITE_KEEPROXY_API as string | undefined) ?? '').replace(/\/$/, '');
+const WATCH = !LOCAL && API !== '';
 
 // The console drives a real vault through keeproxyd (npm run serve). Every
 // button runs as exactly one device; refusals come straight from the
@@ -52,9 +55,20 @@ interface Devices {
   restored: { version: string; payload: Record<string, unknown> } | null;
   timers: { threshold: string; inactivity: string; veto: string };
 }
+interface HistoryItem {
+  kind: 'deploy' | 'call' | 'maintenance';
+  entryPoint: string | null;
+  hash: string;
+  height: number;
+  at: number;
+  status: string | null;
+}
 interface State {
   network: string;
   busy: string | null;
+  watch?: boolean;
+  history?: HistoryItem[];
+  error?: string | null;
   chain: Chain | null;
   devices: Devices | null;
   now: number;
@@ -283,7 +297,7 @@ export function Console() {
 
   const refresh = useCallback(async () => {
     try {
-      const r = await fetch('/api/state');
+      const r = await fetch(`${API}/api/state`);
       setSt((await r.json()) as State);
       setOffline(false);
     } catch {
@@ -293,10 +307,10 @@ export function Console() {
 
   useEffect(() => {
     void refresh();
-    if (!LOCAL) return;
+    if (!LOCAL && !WATCH) return;
     const id = setInterval(refresh, 5000);
     const tick = setInterval(() => setClock(Math.floor(Date.now() / 1000)), 1000);
-    const es = new EventSource('/api/events');
+    const es = new EventSource(`${API}/api/events`);
     es.onmessage = (m) => {
       const e = JSON.parse(m.data) as Ev;
       setEvents((xs) => [...xs.slice(-200), e]);
@@ -389,6 +403,49 @@ export function Console() {
   const nextId = curAct.steps.find((s) => !results[s.id])?.id;
   const progressEv = [...events].reverse().find((e) => e.kind === 'progress');
 
+  const side = c && (
+    <>
+        <Panel title="what the chain sees" right={<span className="live">INDEXER</span>}>
+          <dl className="kv">
+            <dt>contract</dt><dd className="hl">{short(c.address, 12)}</dd>
+            <dt>phase</dt><dd className="hl"><Flash v={c.phase}>{c.phase}</Flash></dd>
+            <dt>balance</dt><dd className="hl"><Flash v={c.balance}>{c.balance} NIGHT</Flash></dd>
+            <dt>ownerKey</dt><dd><Flash v={c.ownerKey}>{short(c.ownerKey)}</Flash> <span className="dim">rotations {c.ownerRotations}</span></dd>
+            <dt>rules</dt><dd>{c.threshold}-of-{c.guardianCount} · inactivity {fmtDur(c.inactivitySeconds)} · veto {fmtDur(c.vetoSeconds)}</dd>
+            <dt>recovery</dt><dd><Flash v={`${c.recoveryRound}${c.approvals}`}>round {c.recoveryRound} · approvals {c.approvals}/{c.threshold} · nullifiers {c.approvalNullifiers.length}</Flash></dd>
+            <dt>backup</dt><dd><Flash v={c.backupVersion}>v{c.backupVersion} · {short(c.backupDigest)}</Flash></dd>
+            <dt>estate</dt><dd><Flash v={`${c.estatePaid}${c.heirClaims.length}`}>{c.estate} · paid {c.estatePaid} · claims {c.heirClaims.length}</Flash></dd>
+            {allFields && (
+              <>
+                <dt>guardians root</dt><dd>{short(c.guardianRoot)}</dd>
+                <dt>heirs root</dt><dd>{short(c.heirRoot)}</dd>
+                <dt>mandates root</dt><dd>{short(c.mandateRoot)} <span className="dim">gen <Flash v={c.mandateGeneration}>{c.mandateGeneration}</Flash></span></dd>
+                <dt>payees root</dt><dd>{short(c.payeeRoot)}</dd>
+                <dt>epoch spend</dt><dd>{c.epochSpend.length ? c.epochSpend.map((e) => `${short(e.key, 6)}=${e.spent}`).join(' · ') : '—'}</dd>
+                <dt>device key</dt><dd><Flash v={c.pendingDeviceKey}>{short(c.pendingDeviceKey)}</Flash></dd>
+                <dt>released shares</dt><dd><Flash v={c.releasedShares.length}>{c.releasedShares.length} sealed</Flash></dd>
+              </>
+            )}
+          </dl>
+          <button className="more" style={{ marginTop: 10 }} onClick={() => setAllFields((x) => !x)}>
+            {allFields ? '− fewer fields' : '+ all fields (roots, spend, keys)'}
+          </button>
+          <div className="privacy-note">
+            <Icon.eyeOff /> Nothing here names a guardian, heir, agent, cap or allowlist.
+          </div>
+        </Panel>
+        <Panel title="vault events" center right={<span className="live">LIVE</span>} bodyClass="panel-body">
+          <div className="events" ref={evRef}>
+            {events.length === 0 && <div className="dim">waiting for events…</div>}
+            {events.map((e, i) => (
+              <EventRow e={e} key={`${e.at}-${i}`} onProof={(h) => setEvProof(evProof === h ? null : h)} />
+            ))}
+          </div>
+          {evProof && <Receipt key={evProof} hash={evProof} contract={c.address} onClose={() => setEvProof(null)} />}
+        </Panel>
+    </>
+  );
+
   return (
     <>
       <Header page="console" />
@@ -412,7 +469,7 @@ export function Console() {
             </div>
           </div>
 
-          {offline && !LOCAL && (
+          {!LOCAL && (offline || (st?.watch && !c)) && (
             <Panel title="run it yourself" center className="reveal">
               <div className="empty hosted">
                 <div className="orbit" aria-hidden>
@@ -453,7 +510,7 @@ npm run build:web && npm run serve`}
             </Panel>
           )}
 
-          {!offline && st && !c && (
+          {!offline && st && !st.watch && !c && (
             <Panel title="no vault yet" center className="reveal">
               <div className="empty">
                 <div className="orbit" aria-hidden>
@@ -487,7 +544,7 @@ npm run build:web && npm run serve`}
             </Panel>
           )}
 
-          {c && d && (
+          {c && (d || st?.watch) && (
             <>
               <div className="tiles reveal">
                 <Tile label="vault balance" value={<>{balance}<small> NIGHT</small></>} sub={<>estate paid {c.estatePaid} / {c.estate}</>} />
@@ -508,10 +565,17 @@ npm run build:web && npm run serve`}
                 <Tile
                   label="agent spend this epoch"
                   value={spentAnim}
-                  sub={Number(d.agent.mandate.generation) === c.mandateGeneration ? 'mandate active · cap is private' : <span style={{ color: 'var(--red)' }}>mandate revoked</span>}
+                  sub={!d ? `mandate generation ${c.mandateGeneration} · cap is private` : Number(d.agent.mandate.generation) === c.mandateGeneration ? 'mandate active · cap is private' : <span style={{ color: 'var(--red)' }}>mandate revoked</span>}
                 />
               </div>
 
+              {st?.watch || !d ? (
+                <div className="console-grid">
+                  <WatchColumn history={st?.history ?? []} contract={c.address} network={st?.network ?? ''} />
+                  <div className="side">{side}</div>
+                </div>
+              ) : (
+              <>
               <div className="viewbar reveal">
                 <div className="seg">
                   <button className={view === 'guided' ? 'on' : ''} onClick={() => setView('guided')}>
@@ -687,47 +751,10 @@ npm run build:web && npm run serve`}
                   )}
                 </div>
 
-                <div className="side">
-                  <Panel title="what the chain sees" right={<span className="live">INDEXER</span>}>
-                    <dl className="kv">
-                      <dt>contract</dt><dd className="hl">{short(c.address, 12)}</dd>
-                      <dt>phase</dt><dd className="hl"><Flash v={c.phase}>{c.phase}</Flash></dd>
-                      <dt>balance</dt><dd className="hl"><Flash v={c.balance}>{c.balance} NIGHT</Flash></dd>
-                      <dt>ownerKey</dt><dd><Flash v={c.ownerKey}>{short(c.ownerKey)}</Flash> <span className="dim">rotations {c.ownerRotations}</span></dd>
-                      <dt>rules</dt><dd>{c.threshold}-of-{c.guardianCount} · inactivity {fmtDur(c.inactivitySeconds)} · veto {fmtDur(c.vetoSeconds)}</dd>
-                      <dt>recovery</dt><dd><Flash v={`${c.recoveryRound}${c.approvals}`}>round {c.recoveryRound} · approvals {c.approvals}/{c.threshold} · nullifiers {c.approvalNullifiers.length}</Flash></dd>
-                      <dt>backup</dt><dd><Flash v={c.backupVersion}>v{c.backupVersion} · {short(c.backupDigest)}</Flash></dd>
-                      <dt>estate</dt><dd><Flash v={`${c.estatePaid}${c.heirClaims.length}`}>{c.estate} · paid {c.estatePaid} · claims {c.heirClaims.length}</Flash></dd>
-                      {allFields && (
-                        <>
-                          <dt>guardians root</dt><dd>{short(c.guardianRoot)}</dd>
-                          <dt>heirs root</dt><dd>{short(c.heirRoot)}</dd>
-                          <dt>mandates root</dt><dd>{short(c.mandateRoot)} <span className="dim">gen <Flash v={c.mandateGeneration}>{c.mandateGeneration}</Flash></span></dd>
-                          <dt>payees root</dt><dd>{short(c.payeeRoot)}</dd>
-                          <dt>epoch spend</dt><dd>{c.epochSpend.length ? c.epochSpend.map((e) => `${short(e.key, 6)}=${e.spent}`).join(' · ') : '—'}</dd>
-                          <dt>device key</dt><dd><Flash v={c.pendingDeviceKey}>{short(c.pendingDeviceKey)}</Flash></dd>
-                          <dt>released shares</dt><dd><Flash v={c.releasedShares.length}>{c.releasedShares.length} sealed</Flash></dd>
-                        </>
-                      )}
-                    </dl>
-                    <button className="more" style={{ marginTop: 10 }} onClick={() => setAllFields((x) => !x)}>
-                      {allFields ? '− fewer fields' : '+ all fields (roots, spend, keys)'}
-                    </button>
-                    <div className="privacy-note">
-                      <Icon.eyeOff /> Nothing here names a guardian, heir, agent, cap or allowlist.
-                    </div>
-                  </Panel>
-                  <Panel title="vault events" center right={<span className="live">LIVE</span>} bodyClass="panel-body">
-                    <div className="events" ref={evRef}>
-                      {events.length === 0 && <div className="dim">waiting for events…</div>}
-                      {events.map((e, i) => (
-                        <EventRow e={e} key={`${e.at}-${i}`} onProof={(h) => setEvProof(evProof === h ? null : h)} />
-                      ))}
-                    </div>
-                    {evProof && <Receipt key={evProof} hash={evProof} contract={c.address} onClose={() => setEvProof(null)} />}
-                  </Panel>
-                </div>
+                <div className="side">{side}</div>
               </div>
+              </>
+              )}
             </>
           )}
         </div>
@@ -740,6 +767,44 @@ npm run build:web && npm run serve`}
       )}
       <Footer />
     </>
+  );
+}
+
+/** Watch mode: the vault's history as the indexer records it, each call with its proof. */
+function WatchColumn({ history, contract, network }: { history: HistoryItem[]; contract: string; network: string }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const calls = history.filter((h) => h.kind !== 'maintenance').reverse();
+  const keys = history.filter((h) => h.kind === 'maintenance').length;
+  return (
+    <div className="watch reveal">
+      <div className="watch-banner">
+        <Icon.eye />
+        <div>
+          <b>Watching a live vault on {network}.</b> This page holds no keys, so it cannot act: every call below was proved
+          on the device that holds its secret. Open any one to check its proof against the indexer.
+          <a className="more" href={`${REPO}#quick-start`} target="_blank" rel="noreferrer"> Run the console yourself →</a>
+        </div>
+      </div>
+      <Panel title="vault history" right={<span className="mono dim" style={{ fontSize: 11 }}>{calls.length} calls · {keys} verifier keys</span>}>
+        {calls.length === 0 && <div className="dim mono" style={{ fontSize: 12 }}>no calls yet</div>}
+        <ol className="history">
+          {calls.map((h, i) => (
+            <li key={h.hash + (h.entryPoint ?? '')} className="hist" style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}>
+              <div className="hist-row">
+                <span className={`hist-dot ${h.status === 'SUCCESS' || h.kind === 'deploy' ? 'ok' : 'warn'}`} />
+                <span className="hist-name">{h.kind === 'deploy' ? 'deploy' : h.entryPoint}</span>
+                <span className="mono dim">block {h.height} · {new Date(h.at).toLocaleString()}</span>
+                <span className="mono dim hist-hash">{short(h.hash, 10)}</span>
+                <button className="proof-btn" onClick={() => setOpen(open === h.hash ? null : h.hash)}>
+                  <Icon.shield /> {open === h.hash ? 'hide proof' : 'view proof'}
+                </button>
+              </div>
+              {open === h.hash && <Receipt hash={h.hash} contract={contract} onClose={() => setOpen(null)} />}
+            </li>
+          ))}
+        </ol>
+      </Panel>
+    </div>
   );
 }
 
@@ -778,7 +843,7 @@ const receipts = new Map<string, Promise<TxReceipt>>();
 function fetchReceipt(hash: string) {
   let p = receipts.get(hash);
   if (!p) {
-    p = fetch(`/api/tx/${hash}`).then(async (r) => {
+    p = fetch(`${API}/api/tx/${hash}`).then(async (r) => {
       const b = (await r.json()) as TxReceipt & { error?: string };
       if (!r.ok) throw new Error(b.error ?? `HTTP ${r.status}`);
       return b;
