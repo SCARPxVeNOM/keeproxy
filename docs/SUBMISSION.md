@@ -15,7 +15,7 @@ A seed phrase is a single point of failure: lose the device and the assets are g
   - **RECOVER.** Anonymous k-of-n guardians (Merkle proofs and per-round nullifiers), a veto window, and owner key rotation that revokes every agent mandate.
   - **RESTORE.** Encrypted private-state backups whose digest and version are anchored on chain (a rollback is refused); guardians release key shares sealed to the new device's X25519 key.
   - **INHERIT and DISCLOSE.** An inactivity timer, a frozen estate, and heirs with private shares who each claim once; guardians release sealed document keys after inheritance triggers.
-- **Tests.** 38 in-memory contract tests covering every guard plus privacy invariants (`assertNotInPublicState` walks the whole public ledger), 4 tests for the RESTORE crypto, and a devnet end-to-end suite that runs all five powers with real proofs.
+- **Tests.** 85 in-memory tests: 38 for every contract guard plus privacy invariants (`assertNotInPublicState` walks the whole public ledger), 20 multi-step scenarios and exact boundary cases, and 27 for the RESTORE crypto and the receipt decoder. A devnet end-to-end suite runs all five powers with real proofs.
 - **Staged deploy.** 13 verifier keys exceed Midnight's block write limit. Ledger 9 also refuses blank key slots (custom error 110), so we deploy with 4 entry points and insert the other 9 verifier keys with maintenance transactions.
 - **Console.** A web app styled after evlog.dev plus a backend (`keeproxyd`). You act as each device (owner laptop, agent, three guardians, new phone, two heirs) and watch **what the chain sees** live from the indexer.
 - **Claude as the agent.** An MCP server whose tools can only act as the agent device. Refusals come back as plain sentences.
@@ -26,7 +26,7 @@ Every role is a hash of a secret held only on that role's device, bound to a ran
 
 ## Testing and validation
 
-`npm run test:sim` runs 42 tests in memory. `npm run test:local` runs the devnet suite: it deploys a vault, enrolls the roles, makes an agent payment and is refused over the cap, anchors a backup and is refused a stale one, recovers with two guardians after the veto window and refuses the old key, releases shares once each, triggers inheritance, has both heirs claim once, then checks the privacy invariants against the indexer.
+`npm run test:sim` runs 85 tests in memory. `npm run test:local` runs the devnet suite: it deploys a vault, enrolls the roles, makes an agent payment and is refused over the cap, anchors a backup and is refused a stale one, recovers with two guardians after the veto window and refuses the old key, releases shares once each, triggers inheritance, has both heirs claim once, then checks the privacy invariants against the indexer.
 
 ## Business
 

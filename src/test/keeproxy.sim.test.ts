@@ -2,110 +2,14 @@
 // powers end to end, and the privacy invariants in docs/SPEC.md. No network,
 // no proofs: `npm run compile:fast && npm run test:sim`.
 
-import { randomBytes } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Sim, assertNotInPublicState, expectRejects, findInPublicState } from './sim.js';
-import {
-  Contract,
-  Phase,
-  Role,
-  ledger,
-  pureCircuits as pc,
-  type Ledger,
-  type Mandate,
-} from '../../contract/managed/proxy/contract/index.js';
+import { Contract, Phase, Role, ledger, pureCircuits as pc } from '../../contract/managed/proxy/contract/index.js';
 import { type KeeproxyPrivateState, witnesses } from '../../contract/witnesses.js';
-
-const bytes32 = () => new Uint8Array(randomBytes(32));
-const addr = () => ({ bytes: bytes32() });
-
-const T0 = 1_800_000_000; // a fixed "now" so the timers are readable
-const DAY = 86_400;
-const WEEK = 7 * DAY;
-const THRESHOLD = 2n;
-const INACTIVITY = BigInt(180 * DAY);
-const VETO = BigInt(3 * DAY);
-
-type KSim = Sim<Contract<KeeproxyPrivateState>, KeeproxyPrivateState, Ledger>;
-
-interface World {
-  sim: KSim;
-  vault: Uint8Array;
-  owner: Uint8Array;
-  guardians: Uint8Array[];
-  heirs: { sk: Uint8Array; bps: bigint }[];
-  agent: Uint8Array;
-  mandate: Mandate;
-  payee: { bytes: Uint8Array };
-}
-
-const now = (sim: KSim) => BigInt(sim.time);
-
-async function deploy(owner: Uint8Array = bytes32(), contract = new Contract(witnesses)): Promise<KSim> {
-  return Sim.deploy({
-    contract,
-    ledger,
-    privateState: { ownerSecret: owner },
-    args: [bytes32(), THRESHOLD, INACTIVITY, VETO, BigInt(T0)],
-    time: T0,
-  });
-}
-
-/** The vault id every key and nullifier is bound to. */
-const vaultOf = (sim: KSim) => sim.ledger().vaultId;
-
-/** Owner device acting. */
-const asOwner = (w: World, sk = w.owner) => {
-  w.sim.privateState = { ownerSecret: sk };
-  return w.sim;
-};
-const asGuardian = (w: World, i: number) => {
-  w.sim.privateState = { guardianSecret: w.guardians[i]! };
-  return w.sim;
-};
-const asAgent = (w: World, mandate = w.mandate, sk = w.agent) => {
-  w.sim.privateState = { agentSecret: sk, mandate };
-  return w.sim;
-};
-const asHeir = (w: World, i: number) => {
-  w.sim.privateState = { heirSecret: w.heirs[i]!.sk, heirShareBps: w.heirs[i]!.bps };
-  return w.sim;
-};
-
-/** A vault with 3 guardians (2 needed), 2 heirs (60/40), one agent mandate and one payee, funded with 1000. */
-async function world(): Promise<World> {
-  const owner = bytes32();
-  const sim = await deploy(owner);
-  const vault = vaultOf(sim);
-  const w: World = {
-    sim,
-    vault,
-    owner,
-    guardians: [bytes32(), bytes32(), bytes32()],
-    heirs: [
-      { sk: bytes32(), bps: 6000n },
-      { sk: bytes32(), bps: 4000n },
-    ],
-    agent: bytes32(),
-    mandate: undefined as unknown as Mandate,
-    payee: addr(),
-  };
-  w.mandate = {
-    agentPk: pc.agentKeyOf(w.agent, vault),
-    capPerEpoch: 200n,
-    epochSeconds: BigInt(WEEK),
-    expiresAt: BigInt(T0 + 30 * DAY),
-    generation: 0n,
-    salt: bytes32(),
-  };
-  asOwner(w);
-  for (const g of w.guardians) await sim.call('enroll', Role.GUARDIAN, pc.guardianLeafOf(g, vault));
-  for (const h of w.heirs) await sim.call('enroll', Role.HEIR, pc.heirLeafOf(pc.heirKeyOf(h.sk, vault), h.bps));
-  await sim.call('enroll', Role.MANDATE, pc.mandateLeafOf(w.mandate));
-  await sim.call('enroll', Role.PAYEE, pc.payeeLeafOf(w.payee.bytes, w.mandate.salt));
-  await sim.call('deposit', 1000n);
-  return w;
-}
+import {
+  DAY, INACTIVITY, T0, THRESHOLD, VETO, WEEK, addr, asAgent, asGuardian, asHeir, asOwner, bytes32, deploy, now, vaultOf, world,
+  type World,
+} from './world.js';
 
 describe('deploy', () => {
   it('stores the owner as a vault-bound hash, and the sealed rules', async () => {

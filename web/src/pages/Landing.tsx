@@ -499,7 +499,7 @@ function Proof() {
         </p>
         <div className="stats">
           <div className="stat"><div className="score">13</div><span>Compact circuits</span></div>
-          <div className="stat"><div className="score">42</div><span>in-memory tests</span></div>
+          <div className="stat"><div className="score">85</div><span>in-memory tests</span></div>
           <div className="stat"><div className="score">8</div><span>devnet e2e steps, real proofs</span></div>
           <div className="stat"><div className="score">0</div><span>secrets in public state</span></div>
         </div>
