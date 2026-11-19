@@ -1,0 +1,410 @@
+// Keeproxy — who can act for you when you can't.
+// SPDX-License-Identifier: Apache-2.0
+//
+// One vault, five powers, one Compact contract:
+//
+//   DELEGATE  an AI agent spends from the vault under a private mandate
+//             (cap per epoch, payee allowlist, expiry, kill switch)
+//   RECOVER   k-of-n anonymous guardians rotate the owner key, with a veto
+//             window the owner can use to cancel a hostile takeover
+//   RESTORE   the owner anchors encrypted private-state backups by digest and
+//             version; after a recovery, guardians release sealed key shares
+//             to the new device
+//   INHERIT   if the owner stays silent past the inactivity period, heirs
+//             claim their private shares of the estate
+//   DISCLOSE  once inheritance triggers, guardians release sealed document
+//             keys (same share-release circuit as RESTORE)
+//
+// Privacy model (what the chain sees vs. what it never sees) is written out in
+// docs/SPEC.md. The short version: every role is a hash of a secret that lives
+// only in someone's private state; membership is proven with Merkle paths;
+// double actions are stopped with per-round nullifiers; mandate terms and heir
+// shares are committed, never published. Values the chain *does* see are the
+// vault's own rules (threshold, timers), its NIGHT balance, and the amount and
+// recipient of each unshielded payment.
+
+pragma language_version 0.28;
+import CompactStandardLibrary;
+
+// ---------------------------------------------------------------- types ----
+
+export enum Phase { ACTIVE, RECOVERING, INHERITED }
+
+// What `enroll` adds to the vault. Each kind has its own Merkle tree.
+export enum Role { GUARDIAN, HEIR, MANDATE, PAYEE }
+
+// The private terms an owner grants an agent. Only `mandateLeaf(m)` reaches
+// the ledger; the agent proves every term inside `agentPay`.
+export struct Mandate {
+  agentPk: Bytes<32>;       // agentKeyOf(agent secret, vault)
+  capPerEpoch: Uint<64>;    // max NIGHT (in specks) the agent may move per epoch
+  epochSeconds: Uint<64>;   // epoch length, e.g. 604800 for a week
+  expiresAt: Uint<64>;      // unix seconds; the mandate is dead from then on
+  generation: Uint<32>;     // must equal mandateGeneration (the kill switch)
+  salt: Bytes<32>;          // hides the terms; also scopes this mandate's payees
+}
+
+// ------------------------------------------------------- sealed config ----
+
+// Random 32 bytes chosen at deploy. Every key, leaf and nullifier hashes it in,
+// so one secret reused across two vaults gives unlinkable values. (A
+// constructor can't use kernel.self(): the address depends on the deploy.)
+export sealed ledger vaultId: Bytes<32>;
+export sealed ledger threshold: Uint<8>;          // guardian approvals needed
+export sealed ledger inactivitySeconds: Uint<64>; // silence before inheritance
+export sealed ledger vetoSeconds: Uint<64>;       // owner's window to cancel a recovery
+
+// ------------------------------------------------------------ owner ----
+
+export ledger ownerKey: Bytes<32>;  // ownerKeyOf(owner secret, vault)
+export ledger ownerRotations: Counter;
+export ledger phase: Phase;
+export ledger lastSeen: Uint<64>;   // last heartbeat (unix seconds)
+export ledger balance: Uint<128>;   // NIGHT held by the vault, in specks
+
+// ------------------------------------------------------------- roles ----
+
+export ledger guardians: MerkleTree<5, Bytes<32>>;
+export ledger guardianCount: Counter;
+export ledger heirs: MerkleTree<5, Bytes<32>>;
+export ledger mandates: MerkleTree<5, Bytes<32>>;
+export ledger payees: MerkleTree<5, Bytes<32>>;
+export ledger mandateGeneration: Uint<32>;
+// Spend per (mandate, epoch), keyed by a hash of the mandate salt and the
+// epoch index, so spends in different epochs can't be linked to each other.
+export ledger epochSpend: Map<Bytes<32>, Uint<64>>;
+
+// ---------------------------------------------------- recover/restore ----
+
+export ledger recoveryRound: Counter;
+export ledger pendingOwner: Bytes<32>;
+export ledger pendingDeviceKey: Bytes<32>;  // X25519 key the new device receives shares on
+export ledger recoveryOpenedAt: Uint<64>;
+export ledger approvals: Uint<8>;
+export ledger approvalNullifiers: Set<Bytes<32>>;
+export ledger restoredRound: Uint<64>;      // the round whose shares may be released
+
+export ledger backupDigest: Bytes<32>;      // SHA-256 of the latest encrypted backup
+export ledger backupVersion: Uint<64>;      // strictly increasing: no rollback
+export ledger releasedShares: Map<Bytes<32>, Opaque<"Uint8Array">>;
+
+// ------------------------------------------------------------ inherit ----
+
+export ledger estate: Uint<128>;     // balance frozen when inheritance triggers
+export ledger estatePaid: Uint<128>;
+export ledger heirClaims: Set<Bytes<32>>;
+
+// ---------------------------------------------------------- witnesses ----
+
+witness ownerSecret(): Bytes<32>;
+witness agentSecret(): Bytes<32>;
+witness guardianSecret(): Bytes<32>;
+witness heirSecret(): Bytes<32>;
+witness activeMandate(): Mandate;
+witness heirShareBps(): Uint<16>;
+witness guardianPath(leaf: Bytes<32>): MerkleTreePath<5, Bytes<32>>;
+witness heirPath(leaf: Bytes<32>): MerkleTreePath<5, Bytes<32>>;
+witness mandatePath(leaf: Bytes<32>): MerkleTreePath<5, Bytes<32>>;
+witness payeePath(leaf: Bytes<32>): MerkleTreePath<5, Bytes<32>>;
+// Integer division done off chain and checked in circuit.
+witness epochIndexOf(now: Uint<64>, epochSeconds: Uint<64>): Uint<64>;
+witness shareOf(estate: Uint<128>, bps: Uint<16>): Uint<128>;
+
+// ------------------------------------------------------ pure helpers ----
+// Exported so the TypeScript side derives exactly the same keys and leaves.
+// Every hash binds the vault id (`vault`), so one secret reused across
+// two vaults yields unlinkable keys.
+
+export pure circuit ownerKeyOf(sk: Bytes<32>, vault: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "keeproxy:owner"), sk, vault]);
+}
+export pure circuit agentKeyOf(sk: Bytes<32>, vault: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "keeproxy:agent"), sk, vault]);
+}
+export pure circuit guardianLeafOf(sk: Bytes<32>, vault: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "keeproxy:guardian"), sk, vault]);
+}
+export pure circuit heirKeyOf(sk: Bytes<32>, vault: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "keeproxy:heir"), sk, vault]);
+}
+// An heir's leaf commits to their key and their share, salted by the key, so
+// the share can't be guessed from the leaf.
+export pure circuit heirLeafOf(heirKey: Bytes<32>, bps: Uint<16>): Bytes<32> {
+  return persistentCommit<Uint<16>>(bps, heirKey);
+}
+export pure circuit mandateLeafOf(m: Mandate): Bytes<32> {
+  return persistentHash<Mandate>(m);
+}
+// A payee is committed under one mandate's salt: each mandate has its own
+// private allowlist, and a leaf reveals neither the address nor the mandate.
+export pure circuit payeeLeafOf(recipient: Bytes<32>, mandateSalt: Bytes<32>): Bytes<32> {
+  return persistentCommit<Bytes<32>>(recipient, mandateSalt);
+}
+export pure circuit spendKeyOf(mandateSalt: Bytes<32>, epochIndex: Uint<64>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "keeproxy:spend"), mandateSalt, epochIndex as Field as Bytes<32>]);
+}
+export pure circuit approvalNullifierOf(sk: Bytes<32>, round: Uint<64>, vault: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<4, Bytes<32>>>([pad(32, "keeproxy:approve"), sk, round as Field as Bytes<32>, vault]);
+}
+export pure circuit releaseNullifierOf(sk: Bytes<32>, round: Uint<64>, vault: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<4, Bytes<32>>>([pad(32, "keeproxy:release"), sk, round as Field as Bytes<32>, vault]);
+}
+export pure circuit claimNullifierOf(sk: Bytes<32>, vault: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "keeproxy:claim"), sk, vault]);
+}
+
+// ------------------------------------------------------ guards ----
+
+// `now` is supplied by the caller and pinned to the block clock: it must not
+// be in the future and must be at most 15 minutes old. Comparisons against
+// private deadlines then use `now`, so the deadlines never reach the kernel.
+circuit requireNow(now: Uint<64>): [] {
+  const t = disclose(now);
+  assert(blockTimeGte(t), "Timestamp is in the future");
+  assert(blockTimeLt((t + 900) as Uint<64>), "Timestamp is stale");
+}
+
+circuit requireOwner(): [] {
+  assert(disclose(ownerKeyOf(ownerSecret(), vaultId)) == ownerKey, "Only the owner can do this");
+}
+
+// Proves the caller holds a guardian secret whose leaf is in the guardian
+// tree, without saying which leaf. Returns the secret for nullifiers.
+circuit requireGuardian(): Bytes<32> {
+  const sk = guardianSecret();
+  const leaf = guardianLeafOf(sk, vaultId);
+  const path = guardianPath(leaf);
+  assert(disclose(path.leaf == leaf), "Path is not for this guardian");
+  assert(guardians.checkRoot(disclose(merkleTreePathRoot<5, Bytes<32>>(path))), "Not a guardian of this vault");
+  return sk;
+}
+
+// ------------------------------------------------------- constructor ----
+
+constructor(id: Bytes<32>, thresholdIn: Uint<8>, inactivityIn: Uint<64>, vetoIn: Uint<64>, now: Uint<64>) {
+  vaultId = disclose(id);
+  assert(thresholdIn > 0, "Threshold must be at least 1");
+  assert(inactivityIn > vetoIn, "Inactivity period must exceed the veto window");
+  threshold = disclose(thresholdIn);
+  inactivitySeconds = disclose(inactivityIn);
+  vetoSeconds = disclose(vetoIn);
+  ownerKey = disclose(ownerKeyOf(ownerSecret(), vaultId));
+  phase = Phase.ACTIVE;
+  lastSeen = disclose(now);
+}
+
+// ============================================================ OWNER ====
+
+// Anyone may fund the vault.
+export circuit deposit(amount: Uint<64>): [] {
+  assert(phase != Phase.INHERITED, "The estate is closed");
+  const a = disclose(amount);
+  assert(a > 0, "Deposit must be positive");
+  receiveUnshielded(nativeToken(), a as Uint<128>);
+  balance = (balance + a) as Uint<128>;
+}
+
+export circuit withdraw(to: UserAddress, amount: Uint<64>): [] {
+  requireOwner();
+  assert(phase == Phase.ACTIVE, "Vault is not active");
+  const a = disclose(amount) as Uint<128>;
+  assert(balance >= a, "Insufficient vault balance");
+  balance = (balance - a) as Uint<128>;
+  sendUnshielded(nativeToken(), a, right<ContractAddress, UserAddress>(disclose(to)));
+}
+
+// Adds a guardian, heir, mandate or payee. Only the leaf (a hash or a salted
+// commitment) is published.
+export circuit enroll(role: Role, leaf: Bytes<32>): [] {
+  requireOwner();
+  assert(phase == Phase.ACTIVE, "Vault is not active");
+  const r = disclose(role);
+  const l = disclose(leaf);
+  if (r == Role.GUARDIAN) {
+    guardians.insert(l);
+    guardianCount.increment(1);
+  } else if (r == Role.HEIR) {
+    heirs.insert(l);
+  } else if (r == Role.MANDATE) {
+    mandates.insert(l);
+  } else {
+    payees.insert(l);
+  }
+}
+
+// Sign of life. Resets the inactivity clock and vetoes any open recovery:
+// a recovery can only succeed against an owner who is really gone.
+export circuit heartbeat(now: Uint<64>): [] {
+  requireOwner();
+  assert(phase != Phase.INHERITED, "The estate is closed");
+  requireNow(now);
+  lastSeen = disclose(now);
+  if (phase == Phase.RECOVERING) {
+    phase = Phase.ACTIVE;
+    approvals = 0;
+  }
+}
+
+// ========================================================= DELEGATE ====
+
+// Kill switch: every mandate issued so far stops working.
+export circuit revokeMandates(): [] {
+  requireOwner();
+  mandateGeneration = (mandateGeneration + 1) as Uint<32>;
+}
+
+// The agent moves NIGHT out of the vault. It proves, without revealing the
+// mandate: it holds the agent key the mandate names, the mandate is enrolled,
+// current, unexpired, the recipient is on that mandate's allowlist, and this
+// epoch's spend stays under the cap.
+export circuit agentPay(recipient: UserAddress, amount: Uint<64>, now: Uint<64>): [] {
+  assert(phase == Phase.ACTIVE, "Vault is not active");
+  requireNow(now);
+  const vault = vaultId;
+  const sk = agentSecret();
+  const m = activeMandate();
+
+  const leaf = mandateLeafOf(m);
+  const path = mandatePath(leaf);
+  assert(disclose(path.leaf == leaf), "Path is not for this mandate");
+  assert(mandates.checkRoot(disclose(merkleTreePathRoot<5, Bytes<32>>(path))), "Mandate is not enrolled");
+  assert(disclose(m.agentPk == agentKeyOf(sk, vault)), "Caller is not this mandate's agent");
+  assert(disclose(m.generation == mandateGeneration), "Mandate was revoked");
+  assert(disclose(now < m.expiresAt), "Mandate has expired");
+
+  const to = disclose(recipient);
+  const pLeaf = payeeLeafOf(to.bytes, m.salt);
+  const pPath = payeePath(pLeaf);
+  assert(disclose(pPath.leaf == pLeaf), "Path is not for this payee");
+  assert(payees.checkRoot(disclose(merkleTreePathRoot<5, Bytes<32>>(pPath))), "Recipient is not on the mandate's allowlist");
+
+  // epoch = floor(now / epochSeconds), computed off chain and checked here.
+  assert(disclose(m.epochSeconds > 0), "Mandate has no epoch length");
+  const e = epochIndexOf(now, m.epochSeconds);
+  assert(disclose((e * m.epochSeconds) as Uint<128> <= now && now < ((e + 1) * m.epochSeconds) as Uint<128>), "Wrong epoch index");
+
+  const key = disclose(spendKeyOf(m.salt, e));
+  const a = disclose(amount);
+  assert(a > 0, "Payment must be positive");
+  const prior = epochSpend.member(key) ? epochSpend.lookup(key) : 0 as Uint<64>;
+  assert(disclose((prior + a) as Uint<128> <= m.capPerEpoch), "Payment exceeds the mandate's cap for this epoch");
+  epochSpend.insert(key, (prior + a) as Uint<64>);
+
+  assert(balance >= a as Uint<128>, "Insufficient vault balance");
+  balance = (balance - a) as Uint<128>;
+  sendUnshielded(nativeToken(), a as Uint<128>, right<ContractAddress, UserAddress>(to));
+}
+
+// ========================================================== RECOVER ====
+
+// A guardian opens a recovery towards a new owner key (held by the new
+// device) and counts as the first approval.
+export circuit openRecovery(newOwner: Bytes<32>, deviceKey: Bytes<32>, now: Uint<64>): [] {
+  assert(phase == Phase.ACTIVE, "Vault is not active");
+  requireNow(now);
+  assert(guardianCount.read() >= threshold, "Vault has fewer guardians than its threshold");
+  const sk = requireGuardian();
+  recoveryRound.increment(1);
+  const n = disclose(approvalNullifierOf(sk, recoveryRound.read(), vaultId));
+  approvalNullifiers.insert(n);
+  approvals = 1;
+  pendingOwner = disclose(newOwner);
+  pendingDeviceKey = disclose(deviceKey);
+  recoveryOpenedAt = disclose(now);
+  phase = Phase.RECOVERING;
+}
+
+export circuit approveRecovery(): [] {
+  assert(phase == Phase.RECOVERING, "No recovery is open");
+  const sk = requireGuardian();
+  const n = disclose(approvalNullifierOf(sk, recoveryRound.read(), vaultId));
+  assert(!approvalNullifiers.member(n), "This guardian already approved");
+  approvalNullifiers.insert(n);
+  approvals = (approvals + 1) as Uint<8>;
+}
+
+// Anyone may finalize once the quorum is met and the veto window has passed.
+// The old owner key dies, and every agent mandate with it.
+export circuit finalizeRecovery(now: Uint<64>): [] {
+  assert(phase == Phase.RECOVERING, "No recovery is open");
+  requireNow(now);
+  assert(approvals >= threshold, "Not enough guardian approvals");
+  assert(disclose(now) >= (recoveryOpenedAt + vetoSeconds) as Uint<64>, "Veto window is still open");
+  ownerKey = pendingOwner;
+  ownerRotations.increment(1);
+  mandateGeneration = (mandateGeneration + 1) as Uint<32>;
+  restoredRound = recoveryRound.read();
+  lastSeen = disclose(now);
+  approvals = 0;
+  phase = Phase.ACTIVE;
+}
+
+// ========================================================== RESTORE ====
+
+// The owner anchors the digest of an encrypted private-state backup. The
+// version must strictly increase, so an older backup (say, from before a
+// mandate was revoked) can never be passed off as the latest.
+export circuit anchorBackup(digest: Bytes<32>, version: Uint<64>): [] {
+  requireOwner();
+  assert(phase == Phase.ACTIVE, "Vault is not active");
+  const v = disclose(version);
+  assert(v > backupVersion, "Backup version must increase");
+  backupDigest = disclose(digest);
+  backupVersion = v;
+}
+
+// A guardian posts its key share, sealed to the recipient: to the new
+// device's key after a recovery (RESTORE), or to the heirs once inheritance
+// has triggered (DISCLOSE). One release per guardian per round.
+export circuit releaseShare(sealedShare: Opaque<"Uint8Array">): [] {
+  const inherited = phase == Phase.INHERITED;
+  assert(inherited || (phase == Phase.ACTIVE && restoredRound > 0 && restoredRound == recoveryRound.read()),
+    "No recovery or inheritance to release shares for");
+  const sk = requireGuardian();
+  const round = inherited ? 0 as Uint<64> : restoredRound;
+  const n = disclose(releaseNullifierOf(sk, round, vaultId));
+  assert(!releasedShares.member(n), "This guardian already released its share");
+  releasedShares.insert(n, disclose(sealedShare));
+}
+
+// ========================================================== INHERIT ====
+
+// Anyone may trigger inheritance once the owner has been silent long enough.
+// The balance is frozen as the estate and every mandate dies.
+export circuit triggerInheritance(now: Uint<64>): [] {
+  assert(phase != Phase.INHERITED, "Inheritance already triggered");
+  requireNow(now);
+  assert(disclose(now) >= (lastSeen + inactivitySeconds) as Uint<64>, "Owner is still active");
+  phase = Phase.INHERITED;
+  estate = balance;
+  mandateGeneration = (mandateGeneration + 1) as Uint<32>;
+}
+
+// An heir proves membership and their private share, and is paid
+// floor(estate * share / 10000) once.
+export circuit claimInheritance(payout: UserAddress): [] {
+  assert(phase == Phase.INHERITED, "Inheritance has not triggered");
+  const vault = vaultId;
+  const sk = heirSecret();
+  const bps = heirShareBps();
+  assert(disclose(bps > 0 && bps <= 10000), "Share out of range");
+  const leaf = heirLeafOf(heirKeyOf(sk, vault), bps);
+  const path = heirPath(leaf);
+  assert(disclose(path.leaf == leaf), "Path is not for this heir");
+  assert(heirs.checkRoot(disclose(merkleTreePathRoot<5, Bytes<32>>(path))), "Not an heir of this vault");
+
+  const n = disclose(claimNullifierOf(sk, vault));
+  assert(!heirClaims.member(n), "This heir already claimed");
+  heirClaims.insert(n);
+
+  const q = disclose(shareOf(estate, bps));
+  const scaled = estate * disclose(bps);
+  assert(q * 10000 <= scaled && scaled < (q + 1) * 10000, "Wrong share amount");
+  assert((estatePaid + q) as Uint<128> <= estate, "Estate is fully paid out");
+  assert(balance >= q, "Insufficient vault balance");
+  estatePaid = (estatePaid + q) as Uint<128>;
+  balance = (balance - q) as Uint<128>;
+  if (q > 0) {
+    sendUnshielded(nativeToken(), q, right<ContractAddress, UserAddress>(disclose(payout)));
+  }
+}

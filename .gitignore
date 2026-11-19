@@ -1,0 +1,14 @@
+node_modules/
+dist/
+contract/managed/
+web/dist/
+web/public/managed/
+.env
+.env.*
+!.env.*.example
+midnight-level-db/
+.wallet-state/
+.keeproxy/
+logs/
+*.log
+.DS_Store
