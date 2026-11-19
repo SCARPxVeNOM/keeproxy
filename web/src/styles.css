@@ -462,3 +462,32 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .new-vault { margin-left: auto; height: 30px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 400; }
 .new-vault svg { width: 12px; height: 12px; }
 .deploying.wide { max-width: none; margin: -4px 0 14px; }
+
+/* ------------------------------------------------------ on-chain receipts */
+.proof-btn { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; padding: 0 7px; height: 20px; border: 1px solid color-mix(in oklab, var(--green) 40%, transparent); background: transparent; color: var(--green); font-family: var(--font-mono); font-size: 10.5px; transition: background .2s; }
+.proof-btn:hover { background: color-mix(in oklab, var(--green) 12%, transparent); }
+.proof-btn svg { width: 11px; height: 11px; }
+.res-note { margin-top: 4px; color: var(--text-muted); font-size: 10.5px; }
+.receipt { margin-top: 10px; border: 1px solid color-mix(in oklab, var(--green) 30%, var(--border)); background: linear-gradient(180deg, color-mix(in oklab, var(--green) 5%, var(--bg-raised)), var(--bg-raised)); padding: 12px 14px; animation: unfold .35s cubic-bezier(.2,.8,.2,1) both; transform-origin: top; }
+@keyframes unfold { from { opacity: 0; transform: scaleY(.92) translateY(-4px); } to { opacity: 1; transform: none; } }
+.receipt-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--green); }
+.receipt-head > span { display: inline-flex; align-items: center; gap: 6px; }
+.receipt-head svg { width: 12px; height: 12px; }
+.receipt-head .more { background: none; border: 0; padding: 0; letter-spacing: 0; text-transform: none; color: var(--text-dim); }
+.receipt-head .more:hover { color: #fff; }
+.receipt-loading { display: grid; gap: 6px; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); }
+.checks { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--text); }
+.checks li { animation: rise .35s ease both; }
+.checks li:nth-child(2) { animation-delay: .08s; } .checks li:nth-child(3) { animation-delay: .16s; } .checks li:nth-child(4) { animation-delay: .24s; }
+.checks li svg { width: 11px; height: 11px; margin-right: 7px; vertical-align: -1px; color: var(--text-dim); }
+.checks li.ok svg { color: var(--green); }
+.checks li.bad svg { color: var(--red); }
+.checks b { color: var(--text-hi); font-weight: 500; }
+.receipt-kv { grid-template-columns: 90px 1fr; font-size: 10.5px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.verify { margin-top: 10px; }
+.verify-cmd { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; margin-top: 6px; }
+.verify-cmd code { display: block; padding: 7px 9px; background: #08080a; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow-x: auto; scrollbar-width: thin; }
+.verify-cmd .btn { height: 28px; padding: 0 9px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; }
+.ev-proof { margin-left: 6px; padding: 0 5px; border: 1px solid var(--border-strong); background: transparent; color: var(--green); font-family: var(--font-mono); font-size: 9.5px; line-height: 15px; }
+.ev-proof:hover { border-color: var(--green); }
+.side .receipt { margin-top: 12px; }

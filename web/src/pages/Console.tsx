@@ -273,6 +273,8 @@ export function Console() {
   const [results, setResults] = useState<Record<string, Result>>({});
   const [allFields, setAllFields] = useState(false);
   const [armNew, setArmNew] = useState(false);
+  const [proofOpen, setProofOpen] = useState<string | null>(null);
+  const [evProof, setEvProof] = useState<string | null>(null);
   const evRef = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -557,7 +559,20 @@ export function Console() {
                                       {r.ok
                                         ? <>confirmed on chain{r.txId ? ` · tx ${short(r.txId, 10)}` : ''}{s.expect === 'refused' && ' (expected a refusal)'}</>
                                         : <>{s.expect === 'refused' ? 'refused, as designed: ' : 'refused: '}{r.error}</>}
+                                      {r.ok && r.txId && (
+                                        <button className="proof-btn" onClick={() => setProofOpen(proofOpen === s.id ? null : s.id)}>
+                                          <Icon.shield /> {proofOpen === s.id ? 'hide proof' : 'view proof'}
+                                        </button>
+                                      )}
+                                      {!r.ok && (
+                                        <div className="res-note">
+                                          No transaction exists: the contract's check failed while building the proof, so nothing could be submitted.
+                                        </div>
+                                      )}
                                     </div>
+                                  )}
+                                  {r?.ok && r.txId && proofOpen === s.id && !running && (
+                                    <Receipt hash={r.txId} contract={c.address} onClose={() => setProofOpen(null)} />
                                   )}
                                 </div>
                                 <div className="step-go">
@@ -673,9 +688,10 @@ export function Console() {
                     <div className="events" ref={evRef}>
                       {events.length === 0 && <div className="dim">waiting for events…</div>}
                       {events.map((e, i) => (
-                        <EventRow e={e} key={`${e.at}-${i}`} />
+                        <EventRow e={e} key={`${e.at}-${i}`} onProof={(h) => setEvProof(evProof === h ? null : h)} />
                       ))}
                     </div>
+                    {evProof && <Receipt key={evProof} hash={evProof} contract={c.address} onClose={() => setEvProof(null)} />}
                   </Panel>
                 </div>
               </div>
@@ -694,7 +710,7 @@ export function Console() {
   );
 }
 
-function EventRow({ e }: { e: Ev }) {
+function EventRow({ e, onProof }: { e: Ev; onProof?: (hash: string) => void }) {
   return (
     <div className={`event ev-${e.kind}`}>
       <span className="dim">{hms(e.at)}</span>
@@ -705,7 +721,111 @@ function EventRow({ e }: { e: Ev }) {
         {e.device && <span className="who">{e.device} </span>}
         {e.circuit && <span className="p">{e.circuit} </span>}
         <span className={e.kind === 'refused' ? '' : 'muted'}>{e.message}</span>
+        {e.txId && onProof && (
+          <button className="ev-proof" onClick={() => onProof(e.txId!)}>proof</button>
+        )}
       </span>
+    </div>
+  );
+}
+
+interface TxReceipt {
+  hash: string;
+  status: string;
+  block: { height: number; hash: string; timestamp: number };
+  fee: string;
+  protocolVersion: number;
+  rawBytes: number;
+  calls: { kind: 'call' | 'deploy' | 'maintenance'; address: string; entryPoint?: string; proofBytes?: number; proofHead?: string }[];
+  outputs: { value: string; owner: string }[];
+  indexer: string;
+}
+
+const receipts = new Map<string, Promise<TxReceipt>>();
+function fetchReceipt(hash: string) {
+  let p = receipts.get(hash);
+  if (!p) {
+    p = fetch(`/api/tx/${hash}`).then(async (r) => {
+      const b = (await r.json()) as TxReceipt & { error?: string };
+      if (!r.ok) throw new Error(b.error ?? `HTTP ${r.status}`);
+      return b;
+    });
+    p.catch(() => receipts.delete(hash));
+    receipts.set(hash, p);
+  }
+  return p;
+}
+
+const asciiOf = (h: string) => h.match(/../g)!.map((x) => String.fromCharCode(parseInt(x, 16))).join('');
+
+/** Everything here comes from the indexer, not from keeproxyd's memory. */
+function Receipt({ hash, contract, onClose }: { hash: string; contract: string; onClose?: () => void }) {
+  const [r, setR] = useState<TxReceipt | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    fetchReceipt(hash).then(setR, (e: unknown) => setErr(String(e instanceof Error ? e.message : e)));
+  }, [hash]);
+
+  const curl = r
+    ? `curl -s ${r.indexer} -H 'content-type: application/json' -d '{"query":"{ transactions(offset:{hash:\\"${hash}\\"}){ hash ... on RegularTransaction { transactionResult{status} block{height} contractActions{ address ... on ContractCall{entryPoint} } } } }"}'`
+    : '';
+  const copy = () => {
+    void navigator.clipboard?.writeText(curl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  return (
+    <div className="receipt">
+      <div className="receipt-head">
+        <span><Icon.shield /> on-chain receipt</span>
+        {onClose && <button className="more" onClick={onClose}>close</button>}
+      </div>
+      {!r && !err && (
+        <div className="receipt-loading"><div className="shimmer" /><span>asking the indexer…</span></div>
+      )}
+      {err && <div className="step-res bad">{err}</div>}
+      {r && (
+        <>
+          <ul className="checks">
+            <li className={r.status === 'SUCCESS' ? 'ok' : 'bad'}>
+              <Icon.check /> included in block <b>#{r.block.height}</b> · status <b>{r.status}</b>
+              <span className="dim"> · {new Date(r.block.timestamp).toLocaleTimeString()}</span>
+            </li>
+            {r.calls.map((k, i) => (
+              <li key={i} className={k.address === contract ? 'ok' : ''}>
+                <Icon.check /> {k.kind === 'call' ? <>called <b>{k.entryPoint}</b> on {k.address === contract ? 'this vault' : short(k.address, 10)}</> : <>{k.kind} on {short(k.address, 10)}</>}
+              </li>
+            ))}
+            {r.calls.filter((k) => k.proofBytes).map((k, i) => (
+              <li key={`p${i}`} className="ok">
+                <Icon.check /> carries a <b>{(k.proofBytes! / 1024).toFixed(1)} KB</b> zero-knowledge proof
+                <span className="dim"> (“{asciiOf(k.proofHead!)}…”)</span>, verified by the node against the contract’s on-chain key
+              </li>
+            ))}
+            {r.outputs.map((o, i) => (
+              <li key={`o${i}`}>
+                <Icon.arrow /> paid out <b>{o.value} NIGHT</b> to {short(o.owner.replace(/^mn_addr_\w+?1/, ''), 10)}
+              </li>
+            ))}
+          </ul>
+          <dl className="kv receipt-kv">
+            <dt>tx hash</dt><dd title={r.hash}>{r.hash}</dd>
+            <dt>block hash</dt><dd title={r.block.hash}>{r.block.hash}</dd>
+            <dt>size</dt><dd>{(r.rawBytes / 1024).toFixed(1)} KB · protocol {r.protocolVersion}</dd>
+            <dt>fee</dt><dd>{r.fee} specks DUST</dd>
+          </dl>
+          <div className="verify">
+            <div className="eyebrow">verify it yourself</div>
+            <div className="verify-cmd">
+              <code>{curl}</code>
+              <button className="btn btn-outline" onClick={copy}>{copied ? <Icon.check /> : <Icon.copy />}{copied ? 'copied' : 'copy'}</button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

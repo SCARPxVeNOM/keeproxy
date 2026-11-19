@@ -11,6 +11,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { VaultService } from '../src/vault-service.js';
+import { txReceipt } from '../src/tx-receipt.js';
 
 const PORT = Number(process.env['PORT'] ?? 8787);
 const HOST = '127.0.0.1';
@@ -94,6 +95,11 @@ const server = createServer(async (req, res) => {
       const b = await body(req);
       const r = await svc.act(String(b['action']), (b['params'] as Record<string, unknown>) ?? {});
       return json(res, 200, r);
+    }
+    const tx = /^\/api\/tx\/([0-9a-fA-F]{64})$/.exec(url.pathname);
+    if (tx && req.method === 'GET') {
+      const r = await txReceipt(svc.config.indexer, tx[1]!.toLowerCase());
+      return r ? json(res, 200, r) : json(res, 404, { error: 'The indexer has no transaction with that hash' });
     }
     if (url.pathname.startsWith('/api/')) return json(res, 404, { error: 'no such endpoint' });
     return serveStatic(req, res);

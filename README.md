@@ -57,6 +57,18 @@ npm run serve               # http://127.0.0.1:8787 — landing page and #/conso
 
 The console deploys a vault, then lets you act as each device (owner laptop, agent, three guardians, new phone, two heirs) and shows **what the chain sees** next to it, live from the indexer.
 
+### Proving each transaction
+
+Every confirmed step has a **view proof** button. The receipt is rebuilt from the indexer, not from keeproxyd's memory (`src/tx-receipt.ts`, `GET /api/tx/<hash>`):
+- the block that included the transaction, and its status
+- the circuit it called on this vault
+- the zero-knowledge proof inside the raw transaction, which the node verified against the contract's on-chain key before accepting it
+- any NIGHT paid out
+
+A copyable `curl` command lets anyone ask the indexer directly. From the terminal: `npm run receipt -- <tx hash>`.
+
+A refused step has no transaction. The contract's check fails while the proof is being built, so nothing reaches the chain.
+
 ### Claude as the agent (MCP)
 
 ```bash

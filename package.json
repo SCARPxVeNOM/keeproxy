@@ -24,7 +24,8 @@
     "serve": "vite-node server/keeproxyd.ts",
     "agent:mcp": "vite-node agent/mcp-server.ts",
     "agent": "vite-node agent/demo-agent.ts",
-    "setup:compactc": "bash scripts/setup-compactc.sh"
+    "setup:compactc": "bash scripts/setup-compactc.sh",
+    "receipt": "vite-node scripts/receipt.ts"
   },
   "dependencies": {
     "@midnight-ntwrk/midnight-js-contracts": "5.0.1",
