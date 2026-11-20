@@ -8,6 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 test -f contract/managed/proxy/keys/enroll.prover || { echo "run npm run compile first (with keys)" >&2; exit 1; }
+bash scripts/fetch-params.sh
 out=.deploy/viewer
 mkdir -p "$out" && find "$out" -mindepth 1 -delete && mkdir -p "$out/web" "$out/server" "$out/contract/managed/proxy"
 cp deploy/viewer/Dockerfile deploy/viewer/railway.json package.json package-lock.json tsconfig.json "$out/"
@@ -16,5 +17,5 @@ cp -r src "$out/src"
 rm -rf "$out/src/test"
 cp server/viewer.ts "$out/server/"
 cp contract/*.ts "$out/contract/"
-for d in contract compiler keys zkir; do cp -r "contract/managed/proxy/$d" "$out/contract/managed/proxy/$d"; done
+for d in contract compiler keys zkir params; do cp -r "contract/managed/proxy/$d" "$out/contract/managed/proxy/$d"; done
 echo "staged $(du -sh "$out" | cut -f1) in $out"

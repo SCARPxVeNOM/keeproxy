@@ -1,6 +1,10 @@
 # Keeproxy: Midnight Buildathon, Wave 3 submission
 
-**Tagline:** Who can act for you when you can't. One Midnight vault for your AI agent, guardians and heirs, private by default.
+**Tagline:** Who can act for you when you can't. A whole-life vault on Midnight for your AI agent, guardians and heirs, private by default.
+
+**Positioning:** Keeproxy is not an agent-payments product. Agent spending is one of five powers in a vault built to outlive a lost device or its owner, and the other powers can switch the agent off: recovery and inheritance revoke every mandate in the same transaction.
+
+**For judges:** [`JUDGES.md`](../JUDGES.md) has a five-minute test path and the limits we know about.
 
 **Repo:** https://github.com/SCARPxVeNOM/keeproxy (Apache-2.0, topic `midnightntwrk`)
 

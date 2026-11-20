@@ -3,11 +3,14 @@ import { Footer, Header, Icon, Panel, REPO } from '../components/ui';
 import {
   BrowserVault,
   NETWORK,
+  PROOF_SERVER_CMD,
   exportHeld,
   forgetHeld,
   importHeld,
   listWallets,
   loadHeld,
+  proverMode,
+  type ProverMode,
   type Held,
   type Outcome,
   type WalletChoice,
@@ -86,6 +89,8 @@ export function Wallet() {
   const [log, setLog] = useState<Entry[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [mode, setMode] = useState<'none' | 'create' | 'join'>('none');
+  const [prover, setProver] = useState<ProverMode>(() => proverMode());
+  const [walletProver, setWalletProver] = useState<{ uri: string | null; reachable: boolean | null } | null>(null);
 
   const say = useCallback((text: string, ok: boolean | null = null, txId?: string) => {
     setLog((l) => [{ at: Date.now(), ok, text, txId }, ...l].slice(0, 80));
@@ -131,6 +136,7 @@ export function Wallet() {
       const v = await BrowserVault.connect(w);
       setVault(v);
       say(`Connected to ${v.walletName} on ${v.networkId}`, true);
+      v.walletProver().then(setWalletProver, () => setWalletProver(null));
     } catch (e) {
       say(e instanceof Error ? e.message : String(e), false);
     } finally {
@@ -141,7 +147,7 @@ export function Wallet() {
   /** Runs one wallet transaction and logs the outcome. */
   async function run(label: string, fn: () => Promise<Outcome>) {
     setBusy(label);
-    say(`${label}: approve it in your wallet…`);
+    say(`${label}: proving, then your wallet approves…`);
     try {
       const r = await fn();
       if (r.ok) say(`${label} confirmed`, true, r.txId);
@@ -216,6 +222,41 @@ export function Wallet() {
                   <b>{bal ? units(bal.night, 6) : '…'}</b>
                   <span>DUST (fees)</span>
                   <b>{bal ? units(bal.dust, 15, 4) : '…'}</b>
+                </div>
+              )}
+              {connected && (
+                <div className="prover">
+                  <span className="dim">proofs</span>
+                  <div className="seg" role="radiogroup" aria-label="Who proves">
+                    {(['browser', 'wallet'] as const).map((m) => (
+                      <button
+                        key={m}
+                        role="radio"
+                        aria-checked={prover === m}
+                        className={prover === m ? 'on' : ''}
+                        disabled={busy !== null}
+                        onClick={() => {
+                          setProver(m);
+                          void vault.useProver(m);
+                        }}
+                      >
+                        {m === 'browser' ? 'This browser' : "Wallet's prover"}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="dim small">
+                    {prover === 'browser'
+                      ? 'Vault proofs run here, in WASM: no proof server to install. Each takes from a few seconds to a couple of minutes; keep this tab open.'
+                      : 'Your wallet proves through its configured prover.'}
+                  </span>
+                </div>
+              )}
+              {connected && walletProver?.reachable === false && (
+                <div className="notice">
+                  Your wallet is set to prove fees with a proof server at <code>{walletProver.uri}</code>, and nothing answers
+                  there. Either start one:
+                  <CopyCode code={PROOF_SERVER_CMD} />
+                  or switch the wallet to a remote prover in its settings, then reconnect.
                 </div>
               )}
               {connected && bal && bal.dust === 0n && (

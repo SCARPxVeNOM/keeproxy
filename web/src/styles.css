@@ -599,3 +599,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .guide b, .guide span, .notice { font-family: var(--font-sans); }
 @media (min-width: 861px) { .mobile-menu { display: none; } }
+
+/* ------------------------------------------------------- prover switch */
+.prover { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); font-size: 12px; }
+.prover .small { grid-column: 2; line-height: 1.5; font-family: var(--font-sans); }
+.seg { display: inline-flex; border: 1px solid var(--border-strong); width: fit-content; }
+.seg button { background: transparent; border: 0; color: var(--text-muted); padding: 5px 10px; font: 500 11px var(--font-mono); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border-strong); }
+.seg button.on { background: var(--primary); color: #fff; }
+.seg button:disabled { opacity: .6; cursor: default; }
+.notice code { font-family: var(--font-mono); font-size: 12px; }
+.notice .copy-code { margin: 8px 0; }

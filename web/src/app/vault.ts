@@ -33,6 +33,7 @@ import {
   type Mandate,
 } from '../../../contract/core';
 import { deployStaged } from '../../../src/staged-deploy';
+import { browserProofProvider } from './browser-prover';
 import { publicViewOf, type PublicView } from '../../../src/public-view';
 
 /** The network the hosted app targets; the wallet must be on it. */
@@ -47,6 +48,28 @@ export const zkProvider = () =>
     // Called as a method otherwise, which the browser refuses ("Illegal invocation").
     fetchFunc: ((input, init) => globalThis.fetch(input as RequestInfo, init as RequestInit)) as typeof fetch,
   });
+/** The public proving parameters, served by the viewer next to the keys. */
+const ZK_PARAMS = `${ZK_ORIGIN}/zk/params/`;
+
+/**
+ * Who proves Keeproxy's circuits: this browser (WASM, no setup), or the
+ * wallet's own prover, which for Lace is often a local proof server.
+ */
+export type ProverMode = 'browser' | 'wallet';
+export function proverMode(): ProverMode {
+  try {
+    return localStorage.getItem('keeproxy:prover') === 'wallet' ? 'wallet' : 'browser';
+  } catch {
+    return 'browser';
+  }
+}
+async function proofProviderFor(mode: ProverMode, api: ConnectedAPI, zk: FetchZkConfigProvider<string>) {
+  return mode === 'wallet' ? dappConnectorProofProvider(api, zk, CostModel.initialCostModel()) : browserProofProvider(zk, ZK_PARAMS);
+}
+
+/** The command that starts the proof server a wallet can be pointed at. */
+export const PROOF_SERVER_CMD = 'docker run -p 6300:6300 midnightntwrk/proof-server:9.0.2 midnight-proof-server';
+
 /** The connector API major this app is written against. */
 const API_MAJOR = '4.';
 
@@ -203,6 +226,9 @@ function reason(e: unknown): string {
   const failed = /failed assert: ([^\n·]+)/.exec(all);
   if (failed) return failed[1]!.trim();
   if (/reject|denied|cancel/i.test(all)) return 'The wallet declined the transaction';
+  if (/proof.?server|prover|:6300|Failed to fetch|ECONNREFUSED/i.test(all)) {
+    return `Your wallet could not reach its proof server. Start one with: ${PROOF_SERVER_CMD}`;
+  }
   if (/ProtocolVersionMismatch|built for protocol version/i.test(all)) {
     return 'Your wallet is still syncing past the ledger 9 upgrade. Leave it open until it catches up, then try again';
   }
@@ -233,6 +259,34 @@ export class BrowserVault {
     private readonly providers: MidnightProviders<string>,
   ) {}
 
+  /** Switches who proves Keeproxy's circuits; remembered for next time. */
+  async useProver(mode: ProverMode) {
+    try {
+      localStorage.setItem('keeproxy:prover', mode);
+    } catch {
+      /* not remembered, still applied */
+    }
+    const zk = this.providers.zkConfigProvider as FetchZkConfigProvider<string>;
+    (this.providers as { proofProvider: unknown }).proofProvider = await proofProviderFor(mode, this.api, zk);
+  }
+
+  /**
+   * The wallet's configured proof server and whether it answers. The wallet
+   * proves its fee inputs there even when this page proves the contract call.
+   * `reachable` is null when the wallet names no server (it proves itself).
+   */
+  async walletProver(): Promise<{ uri: string | null; reachable: boolean | null }> {
+    const { proverServerUri } = await this.api.getConfiguration();
+    if (!proverServerUri) return { uri: null, reachable: null };
+    try {
+      // An opaque answer is enough: only a refused connection throws.
+      await fetch(new URL('/version', proverServerUri), { mode: 'no-cors', signal: AbortSignal.timeout(4000) });
+      return { uri: proverServerUri, reachable: true };
+    } catch {
+      return { uri: proverServerUri, reachable: false };
+    }
+  }
+
   static async connect(choice: WalletChoice): Promise<BrowserVault> {
     const initial = injected()[choice.key];
     if (!initial) throw new Error('That wallet is no longer available');
@@ -242,7 +296,7 @@ export class BrowserVault {
     if (network.networkId !== NETWORK) throw new Error(`Switch ${choice.name} to ${NETWORK} (it is on ${network.networkId})`);
     const zk = zkProvider();
     const { walletProvider, midnightProvider } = await dappConnectorWalletProviders(api);
-    const proofProvider = await dappConnectorProofProvider(api, zk, CostModel.initialCostModel());
+    const proofProvider = await proofProviderFor(proverMode(), api, zk);
     const providers = {
       privateStateProvider: levelPrivateStateProvider({
         privateStateStoreName: `keeproxy-${NETWORK}`,

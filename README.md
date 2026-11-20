@@ -4,16 +4,16 @@
 
 **Who can act for you when you can't.**
 
-One Midnight vault that lets your AI agent, your guardians and your heirs act on your behalf,
+A whole-life vault on Midnight. Your AI agent, your guardians and your heirs act on your behalf,
 within limits a zero-knowledge contract enforces, without the chain ever learning who they are.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Midnight](https://img.shields.io/badge/Midnight-ledger%209-6741d9.svg)](https://midnight.network)
 [![Compact](https://img.shields.io/badge/Compact-0.36.1-1971c2.svg)](contract/proxy.compact)
 [![Tests](https://img.shields.io/badge/tests-85%20in--memory%20%C2%B7%208%20devnet-2f9e44.svg)](#testing)
-[![Preprod](https://img.shields.io/badge/preprod-live%20%C2%B7%2022%20txs-2f9e44.svg)](#live-on-preprod)
+[![Preprod](https://img.shields.io/badge/preprod-live%20%C2%B7%2041%20txs-2f9e44.svg)](#live-on-preprod)
 
-**[Use it with your wallet](https://keeproxy.vercel.app/#/app)** · **[Live console](https://keeproxy.vercel.app/#/console)** · **[On-chain proofs](#live-on-preprod)** · **[Specification](docs/SPEC.md)**
+**[Use it with your wallet](https://keeproxy.vercel.app/#/app)** · **[Judges’ guide](JUDGES.md)** · **[Live console](https://keeproxy.vercel.app/#/console)** · **[On-chain proofs](#live-on-preprod)** · **[Specification](docs/SPEC.md)**
 
 [Overview](#overview) ·
 [Use it](#use-it-with-your-own-wallet) ·
@@ -44,6 +44,10 @@ Keeproxy publishes only the **rules**. Every person is a hash of a secret that l
 | **INHERIT** | After a chosen period of silence, heirs claim private shares of the estate, once each | an owner who is still active, a non-heir, a lied-about share, a double claim, overpaying the estate |
 | **DISCLOSE** | Once inherited, guardians release sealed document keys | release before the trigger, a double release |
 
+**A whole-life vault, not an agent wallet.** Agent payments are the everyday power, and the other four are what let the vault outlive a lost device or its owner. They also govern the agent: a finalized recovery and a triggered inheritance each revoke every mandate in the same transaction, a heartbeat vetoes a pending recovery, and the estate freezes before any heir is paid. An agent budget on its own survives none of those events.
+
+New here? [`JUDGES.md`](JUDGES.md) has a five-minute test path and the limits we know about.
+
 ## Use it with your own wallet
 
 **[keeproxy.vercel.app/#/app](https://keeproxy.vercel.app/#/app)** runs a vault that belongs to you, from the browser, on Midnight preprod.
@@ -62,6 +66,8 @@ Keeproxy publishes only the **rules**. Every person is a hash of a secret that l
 People join a vault by **code, never by secret**: a guardian's or heir's browser generates its secret, keeps it, and shows the owner a code holding only the leaf the contract stores. Role secrets live in the browser that made them; **Download key file** backs them up and **Import key file** restores them elsewhere.
 
 The page fetches the contract's proving keys from the viewer (`/zk/<sha-256>/…`) and refuses any set whose integrity manifest does not hash to the value pinned into the build.
+
+**No proof server needed.** The page proves the vault's circuits itself: the ZKIR v3 prover in WebAssembly, in a worker ([`web/src/app/browser-prover.ts`](web/src/app/browser-prover.ts)), with keys and public parameters checked against pinned hashes. A deposit proves in about 3 seconds, a heartbeat in about 40. Switch **proofs** to **Wallet's prover** to use the wallet's own. The wallet still proves its fee input with its configured prover; if that is a local proof server that is not running, the page says so and shows the command to start it.
 
 **Testing without a synced wallet.** A fresh browser wallet must first replay preprod's history. To test the app before that finishes, `npm run dev-wallet` serves an already-synced wallet over the same connector API on `127.0.0.1:8799`; open the app locally with `?devwallet=8799`. It signs without asking, so it only registers on `localhost`, and refuses mainnet.
 
@@ -143,6 +149,16 @@ Refused in the same session, each with no transaction:
 | Agent pays after the kill switch | `Mandate was revoked` |
 | Guardian triggers inheritance 16 minutes in | `Owner is still active` |
 | The heir claims a second time | `This heir already claimed` |
+
+### Proved in the browser
+
+A third vault, `8eb28ccc3db083d638629536dd547e7632b58300744f600cf40ff8d3c7744b6b`, tests the in-page prover: both calls below were proved by the ZKIR WASM prover inside the web app, with no proof server involved in the circuit proof (the wallet bridge balanced and submitted them). Times UTC, 2026-11-20.
+
+| Action | Circuit | k | Proving time | Block | Status | Receipt |
+|---|---|---|---|---|---|---|
+| Deploy (+ 9 verifier-key transactions) | — | — | — | 3505259 | SUCCESS | [`d4be001a4f…25ee`](https://keeproxy-viewer-production.up.railway.app/api/tx/d4be001a4ffdf87a2749f748637def6803d62b71b4bff90fff362f40910f25ee) |
+| Owner deposits | `deposit` | 9 | about 3 s | 3505340 | SUCCESS | [`b47142951e…5a0b`](https://keeproxy-viewer-production.up.railway.app/api/tx/b47142951e75e66139dedf3b01e1108c543a22128f15ece2175fdd1c2cbd5a0b) |
+| Owner heartbeat | `heartbeat` | 13 | about 40 s | 3505353 | SUCCESS | [`3444eed0de…6612`](https://keeproxy-viewer-production.up.railway.app/api/tx/3444eed0def2861d31cf55af1bf0e43aa240ac30d688677f97e4dcb6d5c76612) |
 
 ### Refused by the contract (the demo vault)
 

@@ -13,6 +13,8 @@ const zkVersion = existsSync(manifest) ? createHash('sha256').update(readFileSyn
 export default defineConfig({
   plugins: [react(), wasm(), nodePolyfills({ include: ['buffer', 'process', 'util', 'stream', 'events'] })],
   define: { __KEEPROXY_ZK_VERSION__: JSON.stringify(zkVersion) },
+  // The in-browser prover (src/app/prover.worker.ts) loads the ZKIR WASM.
+  worker: { format: 'es', plugins: () => [wasm()] },
   build: { target: 'es2022', chunkSizeWarningLimit: 8000 },
   optimizeDeps: { esbuildOptions: { target: 'es2022' } },
   server: {

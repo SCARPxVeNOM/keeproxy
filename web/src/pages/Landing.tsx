@@ -37,8 +37,8 @@ function Hero() {
           of failure<span className="dot">.</span>
         </h1>
         <p className="lede">
-          One Midnight vault that lets your AI agent, your guardians and your heirs act for you, within limits the contract
-          enforces and without the chain learning who they are.
+          A whole-life vault on Midnight. Your AI agent, your guardians and your heirs act for you, within limits the
+          contract enforces and without the chain learning who they are.
         </p>
         <div className="cta-row">
           <a className="btn btn-primary" href="#/app">
@@ -551,6 +551,7 @@ function Faq() {
   const qs: [string, string][] = [
     ['Do I need real money?', 'No. Keeproxy runs on Midnight preprod, a test network. tNIGHT is free from the faucet and has no value.'],
     ['What if I clear my browser?', 'Role keys are kept in this browser. Download the key file from the app and import it on any other browser. If the owner key is lost, that is what guardians are for.'],
+    ['Is this an agent wallet?', 'No. Agent payments are one of five powers. The vault is built to outlive a lost device or its owner, and those other powers can switch the agent off: a recovery or an inheritance revokes every mandate in the same transaction.'],
     ['Is this a wallet?', 'No. It is a vault contract your wallet funds. Your wallet keeps doing what it does; Keeproxy adds who else may act, and under what rules.'],
     ['What stops guardians colluding?', 'The veto window. A recovery needs k approvals and then waits; any heartbeat from the real owner cancels it, and a new round starts from zero.'],
     ['Can the agent drain the vault?', 'Only up to its cap per epoch, only to its allowlist, only until expiry. The owner can kill every mandate with one transaction, and a recovery or inheritance kills them automatically.'],

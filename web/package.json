@@ -20,6 +20,7 @@
     "@midnight-ntwrk/midnight-js-types": "^5.0.1",
     "@midnight-ntwrk/midnight-js-utils": "^5.0.1",
     "@midnightntwrk/wallet-sdk-address-format": "^4.0.1",
+    "@midnightntwrk/zkir-v3": "3.2.1",
     "react": "19.1.1",
     "react-dom": "19.1.1"
   },

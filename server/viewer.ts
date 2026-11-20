@@ -11,8 +11,8 @@
 // history, so the console renders it in watch mode.
 //
 // It also serves the contract's public proving artifacts under
-// /zk/<manifest sha-256>/{compiler,keys,zkir}/<file>, for browsers that prove
-// through their wallet. They are public parameters, not secrets.
+// /zk/<manifest sha-256>/{compiler,keys,zkir}/<file>, and the public proving
+// parameters under /zk/params/, for browsers that prove. None of it is secret.
 
 import { createServer, type ServerResponse } from 'node:http';
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
@@ -202,6 +202,18 @@ const server = createServer(async (req, res) => {
         clearInterval(ping);
       });
       return;
+    }
+    // Public parameters (scripts/fetch-params.sh), checked by the browser too.
+    const params = /^\/zk\/params\/(bls_midnight_2p\d{1,2})$/.exec(url.pathname);
+    if (params) {
+      const file = path.join(ZK_DIR, 'params', params[1]!);
+      if (!existsSync(file)) return json(res, 404, { error: 'no such parameters' });
+      res.writeHead(200, {
+        'content-type': 'application/octet-stream',
+        'content-length': statSync(file).size,
+        'cache-control': 'public, max-age=31536000, immutable',
+      });
+      return void createReadStream(file).pipe(res);
     }
     const zk = /^\/zk\/([0-9a-f]{64})\/(compiler|keys|zkir)\/([A-Za-z0-9_.-]+)$/.exec(url.pathname);
     if (zk) {
