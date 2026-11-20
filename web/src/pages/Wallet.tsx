@@ -32,6 +32,14 @@ const short = (s: string, n = 8) => (s.length > 2 * n + 1 ? `${s.slice(0, n)}…
 const days = (s: number) => `${+(s / 86_400).toFixed(2)} d`;
 const when = (t: number) => (t ? new Date(t * 1000).toLocaleString() : '—');
 
+/** NIGHT has 6 decimals; DUST is counted in Specks (10^15 per DUST). */
+function units(v: bigint, decimals: number, shown = 2): string {
+  const d = 10n ** BigInt(decimals);
+  const whole = (v / d).toLocaleString('en-US');
+  const frac = (v % d).toString().padStart(decimals, '0').slice(0, shown).replace(/0+$/, '');
+  return frac ? `${whole}.${frac}` : whole;
+}
+
 function download(name: string, text: string) {
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
   const a = Object.assign(document.createElement('a'), { href: url, download: name });
@@ -204,11 +212,17 @@ export function Wallet() {
                   <b>{vault.walletName}</b>
                   <span>address</span>
                   <b title={vault.unshieldedAddress}>{short(vault.unshieldedAddress, 12)}</b>
-                  <span>NIGHT</span>
-                  <b>{bal ? bal.night.toString() : '…'}</b>
-                  <span>DUST</span>
-                  <b>{bal ? `${bal.dust.toString()}` : '…'}</b>
+                  <span>tNIGHT</span>
+                  <b>{bal ? units(bal.night, 6) : '…'}</b>
+                  <span>DUST (fees)</span>
+                  <b>{bal ? units(bal.dust, 15, 4) : '…'}</b>
                 </div>
+              )}
+              {connected && bal && bal.dust === 0n && (
+                <p className="notice">
+                  This wallet has no DUST yet, so it cannot pay fees. In your wallet, designate your tNIGHT for DUST
+                  generation and wait a few minutes. If the wallet is still syncing, let it finish first.
+                </p>
               )}
             </Panel>
 
@@ -301,8 +315,35 @@ export function Wallet() {
                 }}
               />
             ) : (
-              <Panel title="vault">
-                <p className="muted">Select or create a vault to see its public state and act on it.</p>
+              <Panel title="how it works">
+                <ol className="guide">
+                  <li>
+                    <b>Connect your wallet.</b>
+                    <span>It pays the fees and proves each transaction. This page never sees its keys.</span>
+                  </li>
+                  <li>
+                    <b>Create a vault.</b>
+                    <span>Pick how many guardians must agree, and how long you can be silent before heirs may inherit. About ten approvals, four minutes.</span>
+                  </li>
+                  <li>
+                    <b>Invite your people.</b>
+                    <span>Guardians and heirs open this page, choose “Join a vault”, and send you the code it makes. You enroll it. The code holds no secret.</span>
+                  </li>
+                  <li>
+                    <b>Give an agent a budget.</b>
+                    <span>A cap per period, a payee, an expiry. One button revokes every mandate.</span>
+                  </li>
+                  <li>
+                    <b>Back up your keys.</b>
+                    <span>Role keys live in this browser. Download the key file and keep it somewhere safe.</span>
+                  </li>
+                </ol>
+                <p className="dim small">
+                  Want to see one first?{' '}
+                  <a className="link" href="#/console">
+                    Watch a live vault on preprod →
+                  </a>
+                </p>
               </Panel>
             )}
             <Panel title="activity" right={busy ? <span className="badge blue">{busy}…</span> : undefined}>

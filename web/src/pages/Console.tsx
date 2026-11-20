@@ -492,7 +492,7 @@ npm run build:web && npm run serve`}
                   <a className="btn btn-primary" href={REPO} target="_blank" rel="noreferrer">
                     <Icon.github /> Open the repo
                   </a>
-                  <a className="btn btn-outline" href="#/">Back to overview</a>
+                  <a className="btn btn-outline" href="#/app">Use your wallet instead</a>
                 </div>
               </div>
             </Panel>
@@ -780,9 +780,9 @@ function WatchColumn({ history, contract, network }: { history: HistoryItem[]; c
       <div className="watch-banner">
         <Icon.eye />
         <div>
-          <b>Watching a live vault on {network}.</b> This page holds no keys, so it cannot act: every call below was proved
-          on the device that holds its secret. Open any one to check its proof against the indexer.
-          <a className="more" href={`${REPO}#quick-start`} target="_blank" rel="noreferrer"> Run the console yourself →</a>
+          <b>A live vault on {network}, read-only.</b> Every call below was proved on the device that holds its secret;
+          open one to check its proof against the indexer.
+          <a className="more" href="#/app"> Create your own vault →</a>
         </div>
       </div>
       <Panel title="vault history" right={<span className="mono dim" style={{ fontSize: 11 }}>{calls.length} calls · {keys} verifier keys</span>}>

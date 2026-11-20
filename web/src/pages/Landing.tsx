@@ -41,13 +41,14 @@ function Hero() {
           enforces and without the chain learning who they are.
         </p>
         <div className="cta-row">
-          <a className="btn btn-primary" href="#/console">
-            Open the console <Icon.arrow />
+          <a className="btn btn-primary" href="#/app">
+            Create your vault <Icon.arrow />
           </a>
-          <a className="btn btn-ghost" href={REPO} target="_blank" rel="noreferrer">
-            <Icon.github className="" /> GitHub
+          <a className="btn btn-ghost" href="#/console">
+            <span className="live-dot" /> Watch a live vault
           </a>
         </div>
+        <p className="hero-note">Free on Midnight preprod · works with Lace · your keys never leave your browser</p>
         <HeroStage />
         <div className="questions">
           <span className="q">Who may spend?</span>
@@ -508,8 +509,48 @@ function Proof() {
   );
 }
 
+function GetStarted() {
+  const steps: [string, string, string][] = [
+    ['Install a wallet', 'Lace with Midnight support, switched to preprod. Free test tokens from the faucet; the wallet turns them into DUST for fees.', 'wallet'],
+    ['Create a vault', 'Choose a guardian threshold, an inactivity period and a veto window. Your wallet approves about ten transactions.', 'vault'],
+    ['Invite your people', 'Guardians and heirs open the same page and send you a code. You enroll it; the chain stores only a hash.', 'people'],
+    ['Delegate and forget', 'Give an agent a capped budget. Heartbeat now and then; if you go silent, your rules take over.', 'agent'],
+  ];
+  return (
+    <section className="section" id="start">
+      <div className="container">
+        <div className="label">get started</div>
+        <h2 className="title left">
+          Four steps,
+          <br />
+          one afternoon<span className="dot">.</span>
+        </h2>
+        <ol className="start-grid">
+          {steps.map(([t, d], i) => (
+            <li key={t}>
+              <span className="start-n">0{i + 1}</span>
+              <b>{t}</b>
+              <p>{d}</p>
+            </li>
+          ))}
+        </ol>
+        <div className="cta-row left">
+          <a className="btn btn-primary" href="#/app">
+            Open the app <Icon.arrow />
+          </a>
+          <a className="btn btn-outline" href="https://faucet.preprod.midnight.network/" target="_blank" rel="noreferrer">
+            Get test tokens ↗
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Faq() {
   const qs: [string, string][] = [
+    ['Do I need real money?', 'No. Keeproxy runs on Midnight preprod, a test network. tNIGHT is free from the faucet and has no value.'],
+    ['What if I clear my browser?', 'Role keys are kept in this browser. Download the key file from the app and import it on any other browser. If the owner key is lost, that is what guardians are for.'],
     ['Is this a wallet?', 'No. It is a vault contract your wallet funds. Your wallet keeps doing what it does; Keeproxy adds who else may act, and under what rules.'],
     ['What stops guardians colluding?', 'The veto window. A recovery needs k approvals and then waits; any heartbeat from the real owner cancels it, and a new round starts from zero.'],
     ['Can the agent drain the vault?', 'Only up to its cap per epoch, only to its allowlist, only until expiry. The owner can kill every mandate with one transaction, and a recovery or inheritance kills them automatically.'],
@@ -547,10 +588,10 @@ function Band() {
           by {hhmm}
           <span>.</span>
         </h2>
-        <p>Deploy a vault, enroll your people, give your agent a budget. Ten minutes.</p>
+        <p>Create a vault, enroll your people, give your agent a budget. All from your browser.</p>
         <div className="cta-row">
-          <a className="btn btn-white" href="#/console">
-            Open the console <Icon.arrow />
+          <a className="btn btn-white" href="#/app">
+            Create your vault <Icon.arrow />
           </a>
           <a className="btn btn-glass" href={REPO} target="_blank" rel="noreferrer">
             <Icon.github className="" /> View on GitHub
@@ -575,6 +616,7 @@ export function Landing() {
         <Privacy />
         <Agents />
         <Proof />
+        <GetStarted />
         <Faq />
         <Band />
       </main>

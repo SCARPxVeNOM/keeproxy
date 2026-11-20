@@ -97,42 +97,80 @@ export function Code({ src }: { src: string }) {
 }
 
 // ----------------------------------------------------------------- header
+const SECTIONS: [string, string][] = [
+  ['#/delegate', 'Delegate'],
+  ['#/recover', 'Recover'],
+  ['#/restore', 'Restore'],
+  ['#/inherit', 'Inherit'],
+  ['#/privacy', 'Privacy'],
+  ['#/agents', 'Agents'],
+];
+
 export function Header({ page }: { page: 'home' | 'console' | 'app' }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const close = () => setOpen(false);
+    window.addEventListener('hashchange', close);
+    return () => window.removeEventListener('hashchange', close);
+  }, []);
   return (
-    <header className="header">
-      <div className="container-wide header-inner">
-        <a href="#/" className="logo">
-          keeproxy<span className="dot">.</span>
-        </a>
-        <nav className="nav">
-          <a href="#/delegate">Delegate</a>
-          <a href="#/recover">Recover</a>
-          <a href="#/restore">Restore</a>
-          <a href="#/inherit">Inherit</a>
-          <a href="#/privacy">Privacy</a>
-          <a href="#/agents">Agents</a>
-        </nav>
-        <div className="header-actions">
-          {page !== 'app' && (
-            <a className="btn btn-outline" href="#/app">
-              Use your wallet
-            </a>
-          )}
-          {page === 'home' ? (
-            <a className="btn btn-primary" href="#/console">
-              Open console <Icon.arrow />
-            </a>
-          ) : (
-            <a className="btn btn-outline" href="#/">
-              Overview
-            </a>
-          )}
-          <a className="icon-btn" href={REPO} target="_blank" rel="noreferrer" aria-label="GitHub">
-            <Icon.github className="" />
+    <>
+      <header className={`header ${open ? 'open' : ''}`}>
+        <div className="container-wide header-inner">
+          <a href="#/" className="logo" aria-label="keeproxy home">
+            keeproxy<span className="dot">.</span>
           </a>
+          <nav className="nav" aria-label="Sections">
+            {SECTIONS.map(([href, name]) => (
+              <a key={href} href={href}>
+                {name}
+              </a>
+            ))}
+          </nav>
+          <div className="header-actions">
+            <a className={`btn btn-ghost hide-sm ${page === 'console' ? 'is-current' : ''}`} href="#/console">
+              <span className="live-dot" /> Live vault
+            </a>
+            {page !== 'app' ? (
+              <a className="btn btn-primary" href="#/app">
+                Create a vault <Icon.arrow />
+              </a>
+            ) : (
+              <a className="btn btn-outline" href="#/">
+                Overview
+              </a>
+            )}
+            <a className="icon-btn hide-sm" href={REPO} target="_blank" rel="noreferrer" aria-label="GitHub">
+              <Icon.github className="" />
+            </a>
+            <button className="menu-btn" aria-label="Menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+              <i />
+              <i />
+            </button>
+          </div>
         </div>
+        {open && (
+          <div className="mobile-menu">
+            <a href="#/app">Create a vault</a>
+            <a href="#/console">Live vault</a>
+            {SECTIONS.map(([href, name]) => (
+              <a key={href} href={href}>
+                {name}
+              </a>
+            ))}
+            <a href={REPO} target="_blank" rel="noreferrer">
+              GitHub ↗
+            </a>
+          </div>
+        )}
+      </header>
+      <div className="netbar">
+        <span className="netbar-dot" /> Running on Midnight <b>preprod</b>, a test network: tokens have no value.{' '}
+        <a href="https://faucet.preprod.midnight.network/" target="_blank" rel="noreferrer">
+          Get test tokens ↗
+        </a>
       </div>
-    </header>
+    </>
   );
 }
 
@@ -168,12 +206,17 @@ export function Footer() {
             <a href="#/inherit">Inherit</a>
             <a href="#/privacy">Disclose</a>
           </div>
+          <span>use</span>
+          <div>
+            <a href="#/app">Create a vault</a>
+            <a href="#/console">Live vault</a>
+            <a href={`${REPO}#live-on-preprod`} target="_blank" rel="noreferrer">On-chain proofs↗</a>
+          </div>
           <span>build</span>
           <div>
             <a href={`${REPO}/blob/main/contract/proxy.compact`} target="_blank" rel="noreferrer">proxy.compact↗</a>
             <a href={`${REPO}/blob/main/docs/SPEC.md`} target="_blank" rel="noreferrer">SPEC.md↗</a>
             <a href={`${REPO}/tree/main/src/test`} target="_blank" rel="noreferrer">tests↗</a>
-            <a href="#/console">Console</a>
           </div>
           <span>midnight</span>
           <div>

@@ -552,3 +552,50 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .act { display: flex; gap: 10px; font-size: 11px; padding: 3px 0; border-bottom: 1px dashed var(--border); animation: rise .3s ease both; }
 .act.ok .grow { color: var(--green); } .act.bad .grow { color: var(--red); }
 .stack-s > * + * { margin-top: 8px; }
+
+/* ------------------------------------------------------- header, notice */
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); display: inline-block; }
+.btn.is-current { color: #fff; }
+.menu-btn { display: none; width: 30px; height: 30px; border: 1px solid var(--border-strong); background: var(--bg-raised); align-items: center; justify-content: center; flex-direction: column; gap: 5px; }
+.menu-btn i { display: block; width: 13px; height: 1.5px; background: var(--text); transition: transform .2s; }
+.header.open .menu-btn i:first-child { transform: translateY(3.25px) rotate(45deg); }
+.header.open .menu-btn i:last-child { transform: translateY(-3.25px) rotate(-45deg); }
+.mobile-menu { display: grid; border-top: 1px solid var(--border); padding: 8px 16px 14px; background: var(--bg); }
+.mobile-menu a { padding: 10px 0; border-bottom: 1px dashed var(--border); font-size: 14px; color: var(--text); }
+.mobile-menu a:first-child { color: #8ea2ff; }
+.netbar { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; padding: 7px 16px; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); border-bottom: 1px solid var(--border); background: color-mix(in oklab, var(--amber) 4%, var(--bg)); text-align: center; }
+.netbar b { color: var(--amber); font-weight: 500; }
+.netbar a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.netbar-dot { width: 5px; height: 5px; background: var(--amber); display: inline-block; }
+@media (max-width: 860px) {
+  .menu-btn { display: inline-flex; }
+  .hide-sm { display: none !important; }
+  .header-actions { gap: 8px; }
+}
+
+/* ------------------------------------------------------- wallet app guide */
+.notice { margin-top: 12px; padding: 10px 12px; border: 1px solid color-mix(in oklab, var(--amber) 40%, transparent); background: color-mix(in oklab, var(--amber) 6%, transparent); color: var(--text); font-size: 13px; line-height: 1.5; }
+.guide { list-style: none; counter-reset: g; display: grid; gap: 14px; margin: 0 0 16px; padding: 0; }
+.guide li { counter-increment: g; display: grid; grid-template-columns: 28px 1fr; column-gap: 10px; }
+.guide li::before { content: counter(g, decimal-leading-zero); grid-row: span 2; font-family: var(--font-mono); font-size: 11px; color: #8ea2ff; padding-top: 2px; }
+.guide b { color: #fff; font-weight: 500; font-size: 14px; }
+.guide span { color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+
+/* ------------------------------------------------------- landing: start */
+.hero-note { margin-top: 14px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+.cta-row { flex-wrap: wrap; }
+.cta-row.left { justify-content: flex-start; }
+.start-grid { list-style: none; padding: 0; margin: 40px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--border); background: var(--bg-panel); }
+.start-grid li { padding: 22px 20px 24px; border-right: 1px solid var(--border); display: grid; gap: 10px; align-content: start; }
+.start-grid li:last-child { border-right: 0; }
+.start-n { font-family: var(--font-mono); font-size: 11px; color: #8ea2ff; }
+.start-grid b { color: var(--text-hi); font-weight: 500; font-size: 15px; }
+.start-grid p { margin: 0; color: var(--text-muted); font-size: 13.5px; line-height: 1.55; }
+@media (max-width: 860px) {
+  .start-grid { grid-template-columns: 1fr; }
+  .start-grid li { border-right: 0; border-bottom: 1px solid var(--border); }
+  .start-grid li:last-child { border-bottom: 0; }
+  .cta-row .btn { flex: 1 1 auto; justify-content: center; }
+}
+.guide b, .guide span, .notice { font-family: var(--font-sans); }
+@media (min-width: 861px) { .mobile-menu { display: none; } }
