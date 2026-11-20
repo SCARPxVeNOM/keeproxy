@@ -11,10 +11,12 @@ within limits a zero-knowledge contract enforces, without the chain ever learnin
 [![Midnight](https://img.shields.io/badge/Midnight-ledger%209-6741d9.svg)](https://midnight.network)
 [![Compact](https://img.shields.io/badge/Compact-0.36.1-1971c2.svg)](contract/proxy.compact)
 [![Tests](https://img.shields.io/badge/tests-85%20in--memory%20%C2%B7%208%20devnet-2f9e44.svg)](#testing)
+[![Preprod](https://img.shields.io/badge/preprod-live%20%C2%B7%2022%20txs-2f9e44.svg)](#live-on-preprod)
 
-**[keeproxy.vercel.app](https://keeproxy.vercel.app)**
+**[Live console](https://keeproxy.vercel.app/#/console)** · **[On-chain proofs](#live-on-preprod)** · **[Specification](docs/SPEC.md)**
 
 [Overview](#overview) ·
+[Live on preprod](#live-on-preprod) ·
 [Architecture](#architecture) ·
 [Flows](#flows) ·
 [Mathematics](#mathematics) ·
@@ -41,6 +43,104 @@ Keeproxy publishes only the **rules**. Every person is a hash of a secret that l
 | **INHERIT** | After a chosen period of silence, heirs claim private shares of the estate, once each | an owner who is still active, a non-heir, a lied-about share, a double claim, overpaying the estate |
 | **DISCLOSE** | Once inherited, guardians release sealed document keys | release before the trigger, a double release |
 
+## Live on preprod
+
+Keeproxy is deployed on the Midnight **preprod** network and has been exercised end to end with real zero-knowledge proofs. Every row below links to a receipt rebuilt from the public indexer, so each claim can be checked without trusting this repository.
+
+| | |
+|---|---|
+| Contract | [`79b8e4659d4fb04716a3f74cd318001e4bc537e07c0be904a810c00f8ffb7a4a`](https://keeproxy-viewer-production.up.railway.app/api/state) |
+| Network | Midnight preprod · ledger 9 (protocol 2001100) · indexer via Blockfrost |
+| Toolchain | Compact 0.36.1 · midnight-js 5.0.1 · wallet-sdk 2.0.1 |
+| Rules | 2-of-3 guardians · 180-day inactivity · 3-day veto window |
+| Deploy record | [`deployments/preprod.json`](deployments/preprod.json) |
+| Live console | [keeproxy.vercel.app/#/console](https://keeproxy.vercel.app/#/console) (watch mode, no keys) |
+
+### On-chain transactions
+
+All times UTC. *Proof* is the size of the zero-knowledge proof embedded in the transaction; the node verified it against the contract's on-chain verifier key before accepting the block.
+
+| # | Action | Circuit | Block | Time | Status | Proof | Receipt |
+|---|---|---|---|---|---|---|---|
+| 1 | Deploy (constructor, 4 entry points) | — | 3492228 | 2026-11-19 22:18 | SUCCESS | — | [`24e26ff74c…cf5e`](https://keeproxy-viewer-production.up.railway.app/api/tx/24e26ff74c0aedecf054e0e2eb78bb80fc066f591c6bee3ffd48dd58ae26cf5e) |
+| 2 | Enroll guardian 1 of 3 | `enroll` | 3495989 | 2026-11-20 04:34 | SUCCESS | 5.3 KB | [`a91ad757f0…c149`](https://keeproxy-viewer-production.up.railway.app/api/tx/a91ad757f0743215bda3ae2b8361256a9bedbb3e7efa7e9c8ec4a74828eec149) |
+| 3 | Enroll guardian 2 of 3 | `enroll` | 3495994 | 2026-11-20 04:34 | SUCCESS | 5.3 KB | [`b5b2a69e62…f09c`](https://keeproxy-viewer-production.up.railway.app/api/tx/b5b2a69e62b758a3f21ae714f425f0e6f7e638fbe744a88738ce7ce1e4cff09c) |
+| 4 | Enroll guardian 3 of 3 | `enroll` | 3496000 | 2026-11-20 04:35 | SUCCESS | 5.3 KB | [`093cd8b1a9…a1e5`](https://keeproxy-viewer-production.up.railway.app/api/tx/093cd8b1a9bc901480234027308a8483e567a77c274871e97785911182eda1e5) |
+| 5 | Enroll heir A (60%) | `enroll` | 3496005 | 2026-11-20 04:36 | SUCCESS | 5.3 KB | [`ec5368791f…4096`](https://keeproxy-viewer-production.up.railway.app/api/tx/ec5368791fade52acd29f9fe8bc3254a07df0306674c12c8ac9940bc2c814096) |
+| 6 | Enroll heir B (40%) | `enroll` | 3496010 | 2026-11-20 04:36 | SUCCESS | 5.3 KB | [`1bd13281aa…175c`](https://keeproxy-viewer-production.up.railway.app/api/tx/1bd13281aa07d53698d862f3dad293f2fa3e481d03262e4b3564894fe8c7175c) |
+| 7 | Enroll the agent mandate (H(m) only) | `enroll` | 3496015 | 2026-11-20 04:37 | SUCCESS | 5.3 KB | [`f10432db3d…13df`](https://keeproxy-viewer-production.up.railway.app/api/tx/f10432db3dfd19e5ca1994b56c1085381b4fd7f39342cf336a7f62ff807513df) |
+| 8 | Enroll the payee (salted commitment) | `enroll` | 3496020 | 2026-11-20 04:37 | SUCCESS | 5.3 KB | [`94d71a7f65…f193`](https://keeproxy-viewer-production.up.railway.app/api/tx/94d71a7f65109afa1d53fde47bb49b742b19f97fcccaf3a67637d6684a93f193) |
+| 9 | Owner deposits NIGHT | `deposit` | 3496024 | 2026-11-20 04:37 | SUCCESS | 3.8 KB | [`a6508446d2…ba3b`](https://keeproxy-viewer-production.up.railway.app/api/tx/a6508446d27e7ab4aa1fc26953daef62dad3cc3e99f50b198b4269938fe7ba3b) |
+| 10 | **DELEGATE:** agent pays 50 to the payee | `agentPay` | 3496031 | 2026-11-20 04:38 | SUCCESS | 5.3 KB | [`7256ccf370…95f8`](https://keeproxy-viewer-production.up.railway.app/api/tx/7256ccf3704dbe585606b35bfdec4c549ac8b544592f37e14bc4a37e204d95f8) |
+| 11 | **INHERIT:** owner heartbeat resets the timer | `heartbeat` | 3496036 | 2026-11-20 04:39 | SUCCESS | 5.3 KB | [`386fc165ad…3bd7`](https://keeproxy-viewer-production.up.railway.app/api/tx/386fc165ad7e61a5e044b7eeef1e14e4aa9d05533b687b241c8898f7ac963bd7) |
+| 12 | **RESTORE:** backup v1 digest anchored | `anchorBackup` | 3496041 | 2026-11-20 04:39 | SUCCESS | 5.3 KB | [`b6f090e660…ba20`](https://keeproxy-viewer-production.up.railway.app/api/tx/b6f090e66082d7f00dea5388556f8b6d77602891d1b69d8b476d1e4857b9ba20) |
+| 13 | Owner deposits NIGHT | `deposit` | 3496045 | 2026-11-20 04:40 | SUCCESS | 3.8 KB | [`fe203f2d5b…0c23`](https://keeproxy-viewer-production.up.railway.app/api/tx/fe203f2d5bae1c40f676bf55c14fc58f73e1031f85ea773338a7513c458d0c23) |
+
+<details>
+<summary><b>Verifier-key installation: 9 maintenance transactions</b></summary>
+
+Thirteen verifier keys do not fit in one block, so the vault deploys with four entry points and installs the other nine with maintenance transactions ([`src/staged-deploy.ts`](src/staged-deploy.ts)).
+
+| # | Block | Time | Status | Receipt |
+|---|---|---|---|---|
+| 1 | 3492232 | 2026-11-19 22:18 | SUCCESS | [`94905b5ea2…0b32`](https://keeproxy-viewer-production.up.railway.app/api/tx/94905b5ea253dcef08b0f52bdc75f59b856afeea742cbe1fba519650064c0b32) |
+| 2 | 3492235 | 2026-11-19 22:19 | SUCCESS | [`785bc051b3…192e`](https://keeproxy-viewer-production.up.railway.app/api/tx/785bc051b3c4b9c315b3da4f52af4b8a3d90a8a589244567f5fad325ded7192e) |
+| 3 | 3492239 | 2026-11-19 22:19 | SUCCESS | [`097523b120…1242`](https://keeproxy-viewer-production.up.railway.app/api/tx/097523b12094c4d28efa03e563c527d1ec4e817deb464fd88cbc2709bfd71242) |
+| 4 | 3492242 | 2026-11-19 22:19 | SUCCESS | [`4a50614047…2f14`](https://keeproxy-viewer-production.up.railway.app/api/tx/4a506140475a275f155600b9608f6d0034d696e05c2793e7f9b18a5586c02f14) |
+| 5 | 3492245 | 2026-11-19 22:20 | SUCCESS | [`d987def606…0179`](https://keeproxy-viewer-production.up.railway.app/api/tx/d987def6065189223ece17c5eb849d7dcb689afcf73ba4dfbbd745b9dc590179) |
+| 6 | 3492249 | 2026-11-19 22:20 | SUCCESS | [`b8bcf6e9c3…0ed4`](https://keeproxy-viewer-production.up.railway.app/api/tx/b8bcf6e9c38b09d1d0f956d5780b5ce014902642876381a2eea8eb1a1bab0ed4) |
+| 7 | 3492252 | 2026-11-19 22:20 | SUCCESS | [`58b1f84894…7f7c`](https://keeproxy-viewer-production.up.railway.app/api/tx/58b1f84894979e4808c54707f2b0701a42a9ad7cdf905be859bcd59e01cd7f7c) |
+| 8 | 3492256 | 2026-11-19 22:21 | SUCCESS | [`98bae37e64…e173`](https://keeproxy-viewer-production.up.railway.app/api/tx/98bae37e6445609cd30c585ab21294439d96ff242a8c5f18c0e6ab1e971ce173) |
+| 9 | 3492260 | 2026-11-19 22:21 | SUCCESS | [`e23477b772…5b04`](https://keeproxy-viewer-production.up.railway.app/api/tx/e23477b772da69657dc0522c9b3ebef13f9fa86370b72eab6a878353be9a5b04) |
+
+</details>
+
+### Refused by the contract
+
+These attempts were made against the same live vault. The contract's checks fail while the proof is being built, so **no transaction can exist**: a refusal costs nothing and leaks nothing.
+
+| Attempt | Device | Refusal |
+|---|---|---|
+| Agent pays 500, above its 200-per-week cap | agent | `Payment exceeds the mandate's cap for this epoch` |
+| Agent pays an address outside the allowlist | agent | `Recipient is not enrolled in this vault` |
+
+### Resulting public state
+
+What any observer can read from the ledger after these transactions ([live JSON](https://keeproxy-viewer-production.up.railway.app/api/state)):
+
+| Field | Value | What it reveals |
+|---|---|---|
+| `phase` | `ACTIVE` | the vault is in normal operation |
+| `balance` | `1200` | 1000 + 250 deposited, 50 paid by the agent |
+| `guardianCount` / `guardianRoot` | `3` / Merkle root | how many guardians, never who |
+| `heirRoot` | Merkle root | nothing about the heirs or their shares |
+| `mandateRoot` | Merkle root | nothing about the agent, its cap or its expiry |
+| `epochSpend` | one entry, `50` | spend under an epoch-scoped key, unlinkable to the agent |
+| `backupVersion` / `backupDigest` | `1` / SHA-256 | a backup exists; its contents stay off chain |
+
+### Verify it yourself
+
+```bash
+# The vault's public ledger and full call history
+curl -s https://keeproxy-viewer-production.up.railway.app/api/state
+
+# A receipt: block, status, circuit, proof size and payouts, read from the indexer
+curl -s https://keeproxy-viewer-production.up.railway.app/api/tx/7256ccf3704dbe585606b35bfdec4c549ac8b544592f37e14bc4a37e204d95f8
+
+# Or from a clone, against your own Blockfrost project
+npm run receipt -- 7256ccf3704dbe585606b35bfdec4c549ac8b544592f37e14bc4a37e204d95f8
+```
+
+The viewer is read-only: it holds no keys or wallet, and answers every write with `405`.
+
+### Test evidence
+
+| Check | Result |
+|---|---|
+| `npm run test:sim` | **85 / 85 passed** across 4 suites (~34 s) |
+| `npm run test:local` | 8 / 8 devnet end-to-end tests, all five powers with real proofs |
+| `npm run typecheck` | clean |
+
 ## Architecture
 
 ![Architecture: devices, keeproxyd, proof server, node, indexer and the public ledger](docs/diagrams/architecture.png)
@@ -53,6 +153,7 @@ Keeproxy publishes only the **rules**. Every person is a hash of a secret that l
 | [`src/restore.ts`](src/restore.ts) | RESTORE crypto: AES-256-GCM backups, Shamir k-of-n over GF(2⁸), X25519 + HKDF sealing. Node's built-in crypto only. |
 | [`src/staged-deploy.ts`](src/staged-deploy.ts) | 13 verifier keys do not fit in one block, and ledger 9 refuses blank key slots, so the vault deploys with 4 entry points and inserts the other 9 keys with maintenance transactions. |
 | [`server/keeproxyd.ts`](server/keeproxyd.ts) | JSON API, a live event stream, and on-chain receipts (`GET /api/tx/<hash>`) for the console. |
+| [`server/viewer.ts`](server/viewer.ts) | The hosted, keyless backend: polls the indexer and serves the public ledger, call history and receipts. Read-only. |
 | [`web/`](web) | Landing page and console (React + Vite): a guided three-act walkthrough and an all-devices view. |
 | [`agent/mcp-server.ts`](agent/mcp-server.ts) | An MCP server that lets Claude act as the vault's agent, and nothing more. |
 
@@ -257,7 +358,7 @@ Tools: `vault_status`, `pay`, `request_limit_raise`. The agent can only pay unde
 
 Copy `.env.preprod.example` to `.env.preprod`, add a Blockfrost project ID and a wallet funded from the faucet, then run `MIDNIGHT_NETWORK=preprod npm run deploy`. The address lands in `deployments/preprod.json`.
 
-**Live on preprod:** [`79b8e465…7a4a`](deployments/preprod.json) (deploy and 9 verifier-key transactions), watched at [keeproxy.vercel.app/#/console](https://keeproxy.vercel.app/#/console).
+To exercise a deployed vault, run `MIDNIGHT_NETWORK=preprod npm run demo` ([`scripts/preprod-demo.ts`](scripts/preprod-demo.ts)). The first run takes the vault over with the owner secret `deploy` wrote and enrolls every role; later runs take step names (`agentPay`, `overCap`, `stranger`, `heartbeat`, `backup`, `deposit`, `withdraw`, `revoke`). The results of the run on the live vault are in [Live on preprod](#live-on-preprod).
 
 A new wallet's first preprod sync replays the chain's shielded and DUST events (about 2 million of each). The DUST sync starts at the ledger-9 boundary ([src/dust-boundary.ts](src/dust-boundary.ts)), because the SDK's own search for that boundary comes back empty against Blockfrost. Progress is checkpointed to `.wallet-state/` every five minutes, so an interrupted sync resumes; a first sync takes about an hour and a half.
 
@@ -321,12 +422,14 @@ The in-memory suites run the compiler's JavaScript output against `compact-runti
 contract/            proxy.compact (13 circuits), witnesses.ts, index.ts
 src/                 vault-service, staged-deploy, restore crypto, tx-receipt, providers / wallet / config
 src/test/            *.sim.test.ts (in memory), keeproxy.test.ts (devnet), world.ts (fixtures)
-server/              keeproxyd: JSON API, event stream, receipts, static web
+server/              keeproxyd (local API, event stream, receipts) and viewer (keyless, hosted)
 agent/               MCP server (Claude as the vault's agent)
 web/                 landing page and console (React, Vite)
 docs/SPEC.md         every ledger field, guard, privacy invariant and accepted leak
 docs/diagrams/       Excalidraw sources (.excalidraw) and rendered PNGs
-scripts/             deploy, receipt, render-diagrams, compactc wrapper
+scripts/             deploy, preprod-demo, receipt, stage-viewer, render-diagrams, compactc wrapper
+deployments/         public deploy records (preprod.json)
+deploy/viewer/       Dockerfile and railway.json for the hosted viewer
 ```
 
 The diagrams are generated from [`docs/diagrams/build.mjs`](docs/diagrams/build.mjs). Open any `.excalidraw` file at [excalidraw.com](https://excalidraw.com) to edit it, or change the layout and run `npm run diagrams`, then open the printed local URL to re-render the PNGs.

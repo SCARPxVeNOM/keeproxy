@@ -140,7 +140,8 @@ export class VaultService extends EventEmitter {
   readonly config: NetworkConfig;
   readonly network: string;
   private alice!: MidnightWalletProvider;
-  private bob!: MidnightWalletProvider;
+  /** Local only: the payee wallet. Elsewhere the fee wallet doubles as payee, saving a second sync. */
+  private bob?: MidnightWalletProvider;
   private prov!: KeeproxyProviders;
   private file: VaultFile | null = null;
   private readonly stateDir: string;
@@ -174,7 +175,7 @@ export class VaultService extends EventEmitter {
     const syncTimeoutMs = network === 'local' ? 10 * 60_000 : 60 * 60_000;
     svc.emitEvent({ kind: 'info', message: `Syncing wallets on ${network}…` });
     svc.alice = await startWallet(svc.logger, env, { network, role: 'ALICE', faucet: c.faucet, syncTimeoutMs });
-    svc.bob = await startWallet(svc.logger, env, { network, role: 'BOB', faucet: c.faucet, syncTimeoutMs });
+    if (network === 'local') svc.bob = await startWallet(svc.logger, env, { network, role: 'BOB', faucet: c.faucet, syncTimeoutMs });
     svc.prov = buildProviders(svc.alice, zkConfigPath, c, { storeName: `keeproxy-${network}` });
     const f = path.join(svc.stateDir, 'vault.json');
     if (existsSync(f)) svc.file = JSON.parse(readFileSync(f, 'utf8')) as VaultFile;
@@ -281,7 +282,6 @@ export class VaultService extends EventEmitter {
     return this.serial('create-vault', async () => {
       const owner = bytes32();
       const vaultId = bytes32();
-      const bobAddr = new Uint8Array((await this.bob.wallet.unshielded.getAddress()).data);
       this.emitEvent({ kind: 'info', message: 'Deploying vault (staged: constructor + verifier keys)…' });
       const d = await deployStaged(this.prov, {
         privateStateId: `deploy-${hex(vaultId).slice(0, 8)}`,
@@ -293,52 +293,79 @@ export class VaultService extends EventEmitter {
             message: stage === 'deploy' ? `tx ${index}/${total} deploy` : `tx ${index}/${total} verifier key: ${circuit}`,
           }),
       });
-      const vault = vaultId;
-      const agent = bytes32();
-      const mandate: Mandate = {
-        agentPk: pc.agentKeyOf(agent, vault),
-        capPerEpoch: 200n,
-        epochSeconds: 604_800n,
-        expiresAt: nowSec() + 30n * 86_400n,
-        generation: 0n,
-        salt: bytes32(),
-      };
-      this.file = {
-        network: this.network,
-        address: d.contractAddress,
-        createdAt: new Date().toISOString(),
-        timers: {
-          threshold: timers.threshold.toString(),
-          inactivity: timers.inactivity.toString(),
-          veto: timers.veto.toString(),
-        },
-        owner: hex(owner),
-        agent: hex(agent),
-        mandate: ser(mandate),
-        guardians: [bytes32(), bytes32(), bytes32()].map(hex),
-        guardianShares: [null, null, null],
-        heirs: [
-          { sk: hex(bytes32()), bps: '6000' },
-          { sk: hex(bytes32()), bps: '4000' },
-        ],
-        payee: hex(bobAddr),
-        stranger: hex(bytes32()),
-        newDevice: null,
-        backups: [],
-        restored: null,
-      };
-      this.save();
-      this.emitEvent({ kind: 'info', message: `Vault at ${d.contractAddress}. Enrolling roles…` });
-      const f = this.file;
-      for (const g of f.guardians) await this.mustCall('owner', 'enroll', Role.GUARDIAN, pc.guardianLeafOf(unhex(g), vault));
-      for (const h of f.heirs)
-        await this.mustCall('owner', 'enroll', Role.HEIR, pc.heirLeafOf(pc.heirKeyOf(unhex(h.sk), vault), BigInt(h.bps)));
-      await this.mustCall('owner', 'enroll', Role.MANDATE, pc.mandateLeafOf(mandate));
-      await this.mustCall('owner', 'enroll', Role.PAYEE, pc.payeeLeafOf(bobAddr, mandate.salt));
-      await this.mustCall('owner', 'deposit', 1000n);
-      this.emitEvent({ kind: 'info', message: 'Vault ready: 3 guardians (2 needed), 2 heirs, 1 agent mandate, 1000 NIGHT.' });
-      return { ok: true, detail: { address: d.contractAddress } };
+      return this.setupRoles(d.contractAddress, owner, vaultId, timers);
     });
+  }
+
+  /**
+   * Takes over a vault deployed elsewhere (npm run deploy) with its owner
+   * secret, then sets up every role the way createVault does.
+   */
+  adoptVault(address: ContractAddress, ownerSecret: Uint8Array): Promise<ActResult> {
+    return this.serial('adopt-vault', async () => {
+      const l = ledger(ledgerState(await this.prov.publicDataProvider.queryContractState(address)));
+      if (l.guardianCount > 0n) throw new Error('This vault already has guardians: adopt only a fresh deploy');
+      this.emitEvent({ kind: 'info', message: `Adopting vault ${address}…` });
+      return this.setupRoles(address, ownerSecret, l.vaultId, {
+        threshold: l.threshold,
+        inactivity: l.inactivitySeconds,
+        veto: l.vetoSeconds,
+      });
+    });
+  }
+
+  /** Enrolls 3 guardians, 2 heirs, an agent mandate and a payee, then deposits. */
+  private async setupRoles(
+    address: ContractAddress,
+    owner: Uint8Array,
+    vault: Uint8Array,
+    timers: { threshold: bigint; inactivity: bigint; veto: bigint },
+  ): Promise<ActResult> {
+    const bobAddr = new Uint8Array((await (this.bob ?? this.alice).wallet.unshielded.getAddress()).data);
+    const agent = bytes32();
+    const mandate: Mandate = {
+      agentPk: pc.agentKeyOf(agent, vault),
+      capPerEpoch: 200n,
+      epochSeconds: 604_800n,
+      expiresAt: nowSec() + 30n * 86_400n,
+      generation: 0n,
+      salt: bytes32(),
+    };
+    this.file = {
+      network: this.network,
+      address,
+      createdAt: new Date().toISOString(),
+      timers: {
+        threshold: timers.threshold.toString(),
+        inactivity: timers.inactivity.toString(),
+        veto: timers.veto.toString(),
+      },
+      owner: hex(owner),
+      agent: hex(agent),
+      mandate: ser(mandate),
+      guardians: [bytes32(), bytes32(), bytes32()].map(hex),
+      guardianShares: [null, null, null],
+      heirs: [
+        { sk: hex(bytes32()), bps: '6000' },
+        { sk: hex(bytes32()), bps: '4000' },
+      ],
+      payee: hex(bobAddr),
+      stranger: hex(bytes32()),
+      newDevice: null,
+      backups: [],
+      restored: null,
+    };
+    this.save();
+    this.emitEvent({ kind: 'info', message: `Vault at ${address}. Enrolling roles…` });
+    const f = this.file;
+    for (const g of f.guardians) await this.mustCall('owner', 'enroll', Role.GUARDIAN, pc.guardianLeafOf(unhex(g), vault));
+    for (const h of f.heirs)
+      await this.mustCall('owner', 'enroll', Role.HEIR, pc.heirLeafOf(pc.heirKeyOf(unhex(h.sk), vault), BigInt(h.bps)));
+    await this.mustCall('owner', 'enroll', Role.MANDATE, pc.mandateLeafOf(mandate));
+    await this.mustCall('owner', 'enroll', Role.PAYEE, pc.payeeLeafOf(bobAddr, mandate.salt));
+    await this.mustCall('owner', 'deposit', 1000n);
+    this.emitEvent({ kind: 'info', message: 'Vault ready: 3 guardians (2 needed), 2 heirs, 1 agent mandate, 1000 NIGHT.' });
+    return { ok: true, detail: { address } };
   }
 
   private async mustCall(device: DeviceId, circuit: string, ...args: unknown[]) {
