@@ -284,6 +284,7 @@ export class VaultService extends EventEmitter {
       const vaultId = bytes32();
       this.emitEvent({ kind: 'info', message: 'Deploying vault (staged: constructor + verifier keys)…' });
       const d = await deployStaged(this.prov, {
+        assets: zkConfigPath,
         privateStateId: `deploy-${hex(vaultId).slice(0, 8)}`,
         initialPrivateState: { ownerSecret: owner },
         args: [vaultId, timers.threshold, timers.inactivity, timers.veto, nowSec()],

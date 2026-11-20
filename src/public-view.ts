@@ -3,7 +3,7 @@
 // "What the chain sees": a vault's public ledger, exactly what any indexer
 // user can read, made JSON-safe. Shared by keeproxyd and the read-only viewer.
 
-import { Phase, type Ledger } from '../contract/index.js';
+import { Phase, type Ledger } from '../contract/core.js';
 
 const hex = (b: Uint8Array) => Buffer.from(b).toString('hex');
 

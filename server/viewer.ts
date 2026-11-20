@@ -9,9 +9,15 @@
 // Same JSON shapes as keeproxyd (/api/status, /api/state, /api/events,
 // /api/tx/:hash), plus `watch: true`, `devices: null` and the vault's call
 // history, so the console renders it in watch mode.
+//
+// It also serves the contract's public proving artifacts under
+// /zk/<manifest sha-256>/{compiler,keys,zkir}/<file>, for browsers that prove
+// through their wallet. They are public parameters, not secrets.
 
 import { createServer, type ServerResponse } from 'node:http';
-import { existsSync, readFileSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import path from 'node:path';
 import { WebSocket } from 'ws';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
 import { LOCAL_CONFIG, getConfig } from '../src/config.js';
@@ -41,6 +47,10 @@ const config = configError ? { ...LOCAL_CONFIG, indexer: 'https://unconfigured.i
 const PORT = Number(process.env['PORT'] ?? 8788);
 const HOST = process.env['HOST'] ?? '0.0.0.0';
 const POLL_MS = Number(process.env['KEEPROXY_POLL_MS'] ?? 6000);
+const ZK_DIR = path.resolve(process.env['KEEPROXY_ZK_DIR'] ?? 'contract/managed/proxy');
+const ZK_MANIFEST = path.join(ZK_DIR, 'compiler', 'contract-manifest.json');
+// The web build pins this hash; it is also the cache key in every /zk/ URL.
+const zkVersion = existsSync(ZK_MANIFEST) ? createHash('sha256').update(readFileSync(ZK_MANIFEST)).digest('hex') : null;
 
 function vaultAddress(): string | null {
   const env = process.env['KEEPROXY_ADDRESS']?.trim();
@@ -165,7 +175,7 @@ const server = createServer(async (req, res) => {
   if (req.method !== 'GET') return json(res, 405, { error: 'watch-only: this backend holds no keys and cannot act' });
   try {
     if (url.pathname === '/' || url.pathname === '/health') {
-      return json(res, 200, { ok: true, network, address, synced: chain !== null, error: configError ?? lastError });
+      return json(res, 200, { ok: true, network, address, synced: chain !== null, zk: zkVersion, error: configError ?? lastError });
     }
     if (url.pathname === '/api/status') return json(res, 200, { network, address, busy: null, watch: true });
     if (url.pathname === '/api/state') {
@@ -192,6 +202,18 @@ const server = createServer(async (req, res) => {
         clearInterval(ping);
       });
       return;
+    }
+    const zk = /^\/zk\/([0-9a-f]{64})\/(compiler|keys|zkir)\/([A-Za-z0-9_.-]+)$/.exec(url.pathname);
+    if (zk) {
+      if (zk[1] !== zkVersion) return json(res, 404, { error: 'unknown artifact version', version: zkVersion });
+      const file = path.join(ZK_DIR, zk[2]!, zk[3]!);
+      if (!existsSync(file)) return json(res, 404, { error: 'no such artifact' });
+      res.writeHead(200, {
+        'content-type': file.endsWith('.json') ? 'application/json' : 'application/octet-stream',
+        'content-length': statSync(file).size,
+        'cache-control': 'public, max-age=31536000, immutable',
+      });
+      return void createReadStream(file).pipe(res);
     }
     const tx = /^\/api\/tx\/([0-9a-fA-F]{64})$/.exec(url.pathname);
     if (tx) {

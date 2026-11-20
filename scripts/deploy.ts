@@ -55,6 +55,7 @@ try {
   const ownerSecret = new Uint8Array(randomBytes(32));
   const vaultId = new Uint8Array(randomBytes(32));
   const r = await deployStaged(providers, {
+    assets: zkConfigPath,
     privateStateId: 'owner',
     initialPrivateState: { ownerSecret },
     args: [vaultId, threshold, inactivity, veto, BigInt(Math.floor(Date.now() / 1000) - 30)],

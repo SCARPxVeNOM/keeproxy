@@ -97,7 +97,7 @@ export function Code({ src }: { src: string }) {
 }
 
 // ----------------------------------------------------------------- header
-export function Header({ page }: { page: 'home' | 'console' }) {
+export function Header({ page }: { page: 'home' | 'console' | 'app' }) {
   return (
     <header className="header">
       <div className="container-wide header-inner">
@@ -113,6 +113,11 @@ export function Header({ page }: { page: 'home' | 'console' }) {
           <a href="#/agents">Agents</a>
         </nav>
         <div className="header-actions">
+          {page !== 'app' && (
+            <a className="btn btn-outline" href="#/app">
+              Use your wallet
+            </a>
+          )}
           {page === 'home' ? (
             <a className="btn btn-primary" href="#/console">
               Open console <Icon.arrow />

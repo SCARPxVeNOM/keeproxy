@@ -10,6 +10,9 @@
 // can do that because deployContract made it the contract's maintenance
 // authority (its signing key sits in the private-state store).
 //
+// No node:* imports: the browser app deploys vaults with this too, passing
+// the URL its proving keys are served from as `assets`.
+//
 // Technique credit: the Stock & Foil team documented the same limit in the
 // Midnight Buildathon (their sdk/src/backend/network.ts).
 
@@ -19,8 +22,8 @@ import {
 } from '@midnight-ntwrk/midnight-js-contracts';
 import { CompiledContract } from '@midnight-ntwrk/midnight-js-protocol/v9/compact-js';
 import { type ContractAddress } from '@midnight-ntwrk/midnight-js-protocol/v9/compact-runtime';
-import { CompiledKeeproxyContract, Contract, witnesses, zkConfigPath, type KeeproxyPrivateState } from '../contract/index.js';
-import { type KeeproxyProviders } from './providers.js';
+import { compiledKeeproxy, Contract, witnesses, type KeeproxyPrivateState } from '../contract/core.js';
+import { type MidnightProviders } from '@midnight-ntwrk/midnight-js-types';
 
 /** Every provable circuit, in deploy order: the ones a fresh vault needs first come first. */
 export const CIRCUIT_IDS = Object.keys(new Contract(witnesses).provableCircuits);
@@ -64,6 +67,8 @@ export interface StagedDeployOptions {
   privateStateId: string;
   initialPrivateState: KeeproxyPrivateState;
   args: [Uint8Array, bigint, bigint, bigint, bigint];
+  /** Where the compiled assets live: a directory in Node, any label in the browser. */
+  assets: string;
   keysPerTx?: number;
   onProgress?: (step: { stage: 'deploy' | 'verifier-key'; circuit?: string; index: number; total: number }) => void;
 }
@@ -74,7 +79,8 @@ export interface StagedDeployResult {
   insertedCircuits: string[];
 }
 
-export async function deployStaged(providers: KeeproxyProviders, opts: StagedDeployOptions): Promise<StagedDeployResult> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function deployStaged(providers: MidnightProviders<any>, opts: StagedDeployOptions): Promise<StagedDeployResult> {
   const perTx = Math.max(1, opts.keysPerTx ?? DEFAULT_KEYS_PER_TX);
   const ordered = [...FIRST.filter((c) => CIRCUIT_IDS.includes(c)), ...CIRCUIT_IDS.filter((c) => !FIRST.includes(c))];
   const first = ordered.slice(0, perTx);
@@ -85,7 +91,7 @@ export async function deployStaged(providers: KeeproxyProviders, opts: StagedDep
   const Subset = subsetContract(new Set(first));
   const compiledSubset = CompiledContract.make('KeeproxyContract', Subset).pipe(
     CompiledContract.withWitnesses(witnesses),
-    CompiledContract.withCompiledFileAssets(zkConfigPath),
+    CompiledContract.withCompiledFileAssets(opts.assets),
   );
 
   progress({ stage: 'deploy', index: 1, total });
@@ -99,7 +105,7 @@ export async function deployStaged(providers: KeeproxyProviders, opts: StagedDep
 
   const maintenance = createCircuitMaintenanceTxInterfaces(
     providers as never,
-    CompiledKeeproxyContract as never,
+    compiledKeeproxy(opts.assets) as never,
     contractAddress,
   ) as unknown as Record<string, { insertVerifierKey(key: Uint8Array): Promise<unknown> }>;
 

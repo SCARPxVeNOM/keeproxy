@@ -121,6 +121,7 @@ describe(`Keeproxy on ${network}`, () => {
 
   it('deploys a vault; only a hash of the owner secret is stored', async () => {
     const deployed = await deployStaged(prov, {
+      assets: zkConfigPath,
       privateStateId: ID.owner,
       initialPrivateState: { ownerSecret: owner },
       args: [vaultId, THRESHOLD, INACTIVITY, VETO, nowSec()],
