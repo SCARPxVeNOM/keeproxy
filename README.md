@@ -13,7 +13,7 @@ within limits a zero-knowledge contract enforces, without the chain ever learnin
 [![Tests](https://img.shields.io/badge/tests-85%20in--memory%20%C2%B7%208%20devnet-2f9e44.svg)](#testing)
 [![Preprod](https://img.shields.io/badge/preprod-live%20%C2%B7%2041%20txs-2f9e44.svg)](#live-on-preprod)
 
-**[Use it with your wallet](https://keeproxy.vercel.app/#/app)** · **[Judges’ guide](JUDGES.md)** · **[Live console](https://keeproxy.vercel.app/#/console)** · **[On-chain proofs](#live-on-preprod)** · **[Specification](docs/SPEC.md)**
+**[Use it with your wallet](https://keeproxy.vercel.app/#/app)** · **[Judges’ guide](JUDGES.md)** · **[Pitch deck](https://claude.ai/artifact/VSVk8M6CVc4GJPEnR9vNtY)** · **[Live console](https://keeproxy.vercel.app/#/console)** · **[On-chain proofs](#live-on-preprod)** · **[Specification](docs/SPEC.md)**
 
 [Overview](#overview) ·
 [Use it](#use-it-with-your-own-wallet) ·

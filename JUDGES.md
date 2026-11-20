@@ -69,4 +69,4 @@ npm run test:sim       # 85 tests, about 40 seconds
 | Live proofs | [README › Live on preprod](README.md#live-on-preprod) |
 | Wallet app | [`web/src/app/vault.ts`](web/src/app/vault.ts), browser prover in [`web/src/app/browser-prover.ts`](web/src/app/browser-prover.ts) |
 | Tests | [`src/test/`](src/test/) |
-| Pitch deck | linked from the submission |
+| Pitch deck | [Keeproxy pitch deck](https://claude.ai/artifact/VSVk8M6CVc4GJPEnR9vNtY) |

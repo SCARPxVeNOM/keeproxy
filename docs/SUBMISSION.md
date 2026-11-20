@@ -6,6 +6,8 @@
 
 **For judges:** [`JUDGES.md`](../JUDGES.md) has a five-minute test path and the limits we know about.
 
+**Pitch deck:** https://claude.ai/artifact/VSVk8M6CVc4GJPEnR9vNtY
+
 **Repo:** https://github.com/SCARPxVeNOM/keeproxy (Apache-2.0, topic `midnightntwrk`)
 
 ## The problem
