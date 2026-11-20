@@ -53,7 +53,7 @@ New here? [`JUDGES.md`](JUDGES.md) has a five-minute test path and the limits we
 **[keeproxy.vercel.app/#/app](https://keeproxy.vercel.app/#/app)** runs a vault that belongs to you, from the browser, on Midnight preprod.
 
 1. Install [Lace](https://www.lace.io/) with Midnight support, switch it to **preprod**, fund it from the [faucet](https://faucet.preprod.midnight.network/), and designate NIGHT for DUST generation (fees are paid in DUST).
-2. Open the app and **Connect**. The page talks to the wallet through the Midnight DApp Connector API (v4): the wallet balances, proves and submits every transaction, and the page never sees its keys.
+2. Open the app and **Connect**. The page talks to the wallet through the Midnight DApp Connector API (v4). The page proves the vault's circuit; the wallet balances the transaction, pays the DUST fee and submits it. The page never sees the wallet's keys.
 3. **Create a vault**: choose the guardian threshold, the inactivity period and the veto window, then approve ten transactions (the deploy, and nine verifier keys that do not fit in one block).
 
 | You are | You can |
@@ -65,7 +65,7 @@ New here? [`JUDGES.md`](JUDGES.md) has a five-minute test path and the limits we
 
 People join a vault by **code, never by secret**: a guardian's or heir's browser generates its secret, keeps it, and shows the owner a code holding only the leaf the contract stores. Role secrets live in the browser that made them; **Download key file** backs them up and **Import key file** restores them elsewhere.
 
-The page fetches the contract's proving keys from the viewer (`/zk/<sha-256>/…`) and refuses any set whose integrity manifest does not hash to the value pinned into the build.
+The page fetches the contract's proving keys from the viewer (`/zk/<sha-256>/…`) and refuses any set whose integrity manifest does not hash to the value pinned into the build. The public proving parameters come from `/zk/params/`, each checked against the SHA-256 the Midnight wallet SDK pins.
 
 **No proof server needed.** The page proves the vault's circuits itself: the ZKIR v3 prover in WebAssembly, in a worker ([`web/src/app/browser-prover.ts`](web/src/app/browser-prover.ts)), with keys and public parameters checked against pinned hashes. A deposit proves in about 3 seconds, a heartbeat in about 40. Switch **proofs** to **Wallet's prover** to use the wallet's own. The wallet still proves its fee input with its configured prover; if that is a local proof server that is not running, the page says so and shows the command to start it.
 
@@ -431,18 +431,18 @@ A new wallet's first preprod sync replays the chain's shielded and DUST events (
 
 | Piece | Where | Holds |
 |---|---|---|
-| Website and console UI | Vercel ([keeproxy.vercel.app](https://keeproxy.vercel.app), root `web/`) | nothing |
-| `keeproxy-viewer` ([server/viewer.ts](server/viewer.ts)) | Railway | no keys, no wallet, no private state |
+| Website, console and wallet app | Vercel ([keeproxy.vercel.app](https://keeproxy.vercel.app), root `web/`) | nothing; role keys stay in each visitor's browser |
+| `keeproxy-viewer` ([server/viewer.ts](server/viewer.ts)) | Railway | no keys, no wallet, no private state; serves public proving keys and parameters |
 
-The hosted console cannot act. It shows a live vault read from the indexer: what the chain sees, every call in its history, and a receipt with the proof for each one. All actions still run on the devices that hold the secrets: `keeproxyd` locally, or the MCP agent. The viewer answers every write with `405`.
+The hosted console cannot act. It shows a live vault read from the indexer: what the chain sees, every call in its history, and a receipt with the proof for each one. Actions run where the secrets are: in a visitor's browser through the wallet app, in `keeproxyd` locally, or in the MCP agent. The viewer answers every write with `405`.
 
 ```bash
-npm run compile:fast && bash scripts/stage-viewer.sh
+npm run compile && bash scripts/stage-viewer.sh   # full keys; fetches and verifies the public parameters
 cd .deploy/viewer && railway up            # Dockerfile + railway.json
 railway variables --set MIDNIGHT_NETWORK=preprod --set BLOCKFROST_PROJECT_ID=… --set KEEPROXY_ADDRESS=<contract>
 ```
 
-The web build reads the viewer's URL from `VITE_KEEPROXY_API`. The Blockfrost project ID is stripped from everything the viewer returns. Until `KEEPROXY_ADDRESS` is set, the hosted console shows the run-it-yourself steps.
+The web build reads the viewer's URL from `VITE_KEEPROXY_API`. The compiled contract is gitignored, so the site is built locally and deployed prebuilt (`vercel build --prod && vercel deploy --prebuilt --prod` in `web/`). The Blockfrost project ID is stripped from everything the viewer returns. Until `KEEPROXY_ADDRESS` is set, the hosted console shows the run-it-yourself steps.
 
 ## Testing
 
@@ -489,10 +489,11 @@ src/                 vault-service, staged-deploy, restore crypto, tx-receipt, p
 src/test/            *.sim.test.ts (in memory), keeproxy.test.ts (devnet), world.ts (fixtures)
 server/              keeproxyd (local API, event stream, receipts) and viewer (keyless, hosted)
 agent/               MCP server (Claude as the vault's agent)
-web/                 landing page, console, and the wallet app (src/app: DApp Connector providers)
+web/                 landing page, console, and the wallet app (src/app: connector providers, in-browser prover)
 docs/SPEC.md         every ledger field, guard, privacy invariant and accepted leak
+JUDGES.md            five-minute test path and known limits
 docs/diagrams/       Excalidraw sources (.excalidraw) and rendered PNGs
-scripts/             deploy, preprod-demo, dev-wallet, receipt, stage-viewer, render-diagrams, compactc wrapper
+scripts/             deploy, preprod-demo, dev-wallet, receipt, stage-viewer, fetch-params, render-diagrams, compactc wrapper
 deployments/         public deploy records (preprod.json)
 deploy/viewer/       Dockerfile and railway.json for the hosted viewer
 ```
