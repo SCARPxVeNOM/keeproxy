@@ -13,9 +13,10 @@ within limits a zero-knowledge contract enforces, without the chain ever learnin
 [![Tests](https://img.shields.io/badge/tests-85%20in--memory%20%C2%B7%208%20devnet-2f9e44.svg)](#testing)
 [![Preprod](https://img.shields.io/badge/preprod-live%20%C2%B7%2022%20txs-2f9e44.svg)](#live-on-preprod)
 
-**[Live console](https://keeproxy.vercel.app/#/console)** · **[On-chain proofs](#live-on-preprod)** · **[Specification](docs/SPEC.md)**
+**[Use it with your wallet](https://keeproxy.vercel.app/#/app)** · **[Live console](https://keeproxy.vercel.app/#/console)** · **[On-chain proofs](#live-on-preprod)** · **[Specification](docs/SPEC.md)**
 
 [Overview](#overview) ·
+[Use it](#use-it-with-your-own-wallet) ·
 [Live on preprod](#live-on-preprod) ·
 [Architecture](#architecture) ·
 [Flows](#flows) ·
@@ -42,6 +43,27 @@ Keeproxy publishes only the **rules**. Every person is a hash of a secret that l
 | **RESTORE** | The owner's private state is backed up encrypted, with its digest and version anchored on chain; after a recovery, guardians seal key shares to the new device | a stale or rolled-back backup, a tampered blob, a double share release, the stolen laptop |
 | **INHERIT** | After a chosen period of silence, heirs claim private shares of the estate, once each | an owner who is still active, a non-heir, a lied-about share, a double claim, overpaying the estate |
 | **DISCLOSE** | Once inherited, guardians release sealed document keys | release before the trigger, a double release |
+
+## Use it with your own wallet
+
+**[keeproxy.vercel.app/#/app](https://keeproxy.vercel.app/#/app)** runs a vault that belongs to you, from the browser, on Midnight preprod.
+
+1. Install [Lace](https://www.lace.io/) with Midnight support, switch it to **preprod**, fund it from the [faucet](https://faucet.preprod.midnight.network/), and designate NIGHT for DUST generation (fees are paid in DUST).
+2. Open the app and **Connect**. The page talks to the wallet through the Midnight DApp Connector API (v4): the wallet balances, proves and submits every transaction, and the page never sees its keys.
+3. **Create a vault**: choose the guardian threshold, the inactivity period and the veto window, then approve ten transactions (the deploy, and nine verifier keys that do not fit in one block).
+
+| You are | You can |
+|---|---|
+| **Owner** | deposit, withdraw, heartbeat, enroll guardians and heirs from their codes, give an AI agent a mandate (cap, epoch, expiry, payee), revoke every mandate at once |
+| **Guardian** | generate a guardian code for the owner, open a recovery for the owner's new device, approve and finalize it, trigger inheritance |
+| **Heir** | generate an heir code that binds your share, claim it to your wallet once inheritance triggers |
+| **Owner on a new device** | generate a recovery request for a guardian, take ownership once the recovery finalizes |
+
+People join a vault by **code, never by secret**: a guardian's or heir's browser generates its secret, keeps it, and shows the owner a code holding only the leaf the contract stores. Role secrets live in the browser that made them; **Download key file** backs them up and **Import key file** restores them elsewhere.
+
+The page fetches the contract's proving keys from the viewer (`/zk/<sha-256>/…`) and refuses any set whose integrity manifest does not hash to the value pinned into the build.
+
+**Testing without a synced wallet.** A fresh browser wallet must first replay preprod's history. To test the app before that finishes, `npm run dev-wallet` serves an already-synced wallet over the same connector API on `127.0.0.1:8799`; open the app locally with `?devwallet=8799`. It signs without asking, so it only registers on `localhost`, and refuses mainnet.
 
 ## Live on preprod
 
@@ -95,7 +117,34 @@ Thirteen verifier keys do not fit in one block, so the vault deploys with four e
 
 </details>
 
-### Refused by the contract
+### Driven from the browser
+
+A second vault, `aa81c777b0482ee010deda0985b7690d16df4039999a6b3e3478155dd90b224f` ([deploy receipt](https://keeproxy-viewer-production.up.railway.app/api/tx/9f7f4136750fbfac39d060b004d9241e0049d3aec4bfa9fa5ca73fdc9ff0c63c)), was created and used entirely through the wallet app: every transaction was built in the page and handed to the wallet over the DApp Connector API to balance, prove and submit. The wallet on the other side was the dev bridge (`npm run dev-wallet`), since a fresh Lace wallet was still replaying preprod's history. Its timers were set short (29 minutes of inactivity, a 7-minute veto) so the whole life of the vault fits in half an hour. Times UTC.
+
+| Action | Circuit | Block | Time | Status | Receipt |
+|---|---|---|---|---|---|
+| Deploy the vault | — | 3500850 | 12:40 | SUCCESS | [`9f7f413675…c63c`](https://keeproxy-viewer-production.up.railway.app/api/tx/9f7f4136750fbfac39d060b004d9241e0049d3aec4bfa9fa5ca73fdc9ff0c63c) |
+| + 9 verifier-key transactions | — | 3500854–3500884 | | SUCCESS | |
+| Owner deposits 100 | `deposit` | 3500891 | 12:44 | SUCCESS | [`850f924e6d…1c53`](https://keeproxy-viewer-production.up.railway.app/api/tx/850f924e6d0a682261d07291acc03ef1b645a8c63a7cb5bbe16ec533cfd41c53) |
+| Enroll a guardian (from its code) | `enroll` | 3500904 | 12:45 | SUCCESS | [`54e364a5cd…3166`](https://keeproxy-viewer-production.up.railway.app/api/tx/54e364a5cdba50be99d09fe92eacc98ef559aad5d99a27fc8f5c79ed7f653166) |
+| Enroll an heir, 50% (from its code) | `enroll` | 3500910 | 12:46 | SUCCESS | [`ed61133c7e…a052`](https://keeproxy-viewer-production.up.railway.app/api/tx/ed61133c7e23bec2fbde29f2cce74bc03c296b6405c02a66921b33b0b065a052) |
+| Agent mandate: cap 200 per 7 days | `enroll` | 3500918 | 12:47 | SUCCESS | [`355ca65c0d…d523`](https://keeproxy-viewer-production.up.railway.app/api/tx/355ca65c0d71b81f11fba8f6da3f51992544008684ca36b7d814efd95db8d523) |
+| Agent payee | `enroll` | 3500924 | 12:47 | SUCCESS | [`25686ef79e…c2b0`](https://keeproxy-viewer-production.up.railway.app/api/tx/25686ef79e86620a4a47318033e2af2ed807272e930a497668751a9198f8c2b0) |
+| **DELEGATE:** agent pays 50 | `agentPay` | 3500935 | 12:49 | SUCCESS | [`4a2a6aa735…7e6a`](https://keeproxy-viewer-production.up.railway.app/api/tx/4a2a6aa7356122f4d4138f50d00766211215c04f2c2a6b3aa4a4debc28aa7e6a) |
+| **Kill switch:** revoke every mandate | `revokeMandates` | 3500948 | 12:50 | SUCCESS | [`95d0e120a5…6ef8`](https://keeproxy-viewer-production.up.railway.app/api/tx/95d0e120a51f767abf0f269b808558c125d82c0384a09ec3ee614ecef2026ef8) |
+| **INHERIT:** guardian triggers after 29 min of silence | `triggerInheritance` | 3501143 | 13:09 | SUCCESS | [`a2dd482269…28dd`](https://keeproxy-viewer-production.up.railway.app/api/tx/a2dd4822693575037409c08a8c509a0558ce4df2b90e0a3b11398d5ba80328dd) |
+| **INHERIT:** heir claims its 50%: 25 of the 50 estate | `claimInheritance` | 3501152 | 13:10 | SUCCESS | [`30289197d4…7de4`](https://keeproxy-viewer-production.up.railway.app/api/tx/30289197d471af931ad8002c6bb08c460d27b27a83733baec2f13914401c7de4) |
+
+Refused in the same session, each with no transaction:
+
+| Attempt | Refusal |
+|---|---|
+| Agent pays 500, over its cap | `Payment exceeds the mandate's cap for this epoch` |
+| Agent pays after the kill switch | `Mandate was revoked` |
+| Guardian triggers inheritance 16 minutes in | `Owner is still active` |
+| The heir claims a second time | `This heir already claimed` |
+
+### Refused by the contract (the demo vault)
 
 These attempts were made against the same live vault. The contract's checks fail while the proof is being built, so **no transaction can exist**: a refusal costs nothing and leaks nothing.
 
@@ -424,10 +473,10 @@ src/                 vault-service, staged-deploy, restore crypto, tx-receipt, p
 src/test/            *.sim.test.ts (in memory), keeproxy.test.ts (devnet), world.ts (fixtures)
 server/              keeproxyd (local API, event stream, receipts) and viewer (keyless, hosted)
 agent/               MCP server (Claude as the vault's agent)
-web/                 landing page and console (React, Vite)
+web/                 landing page, console, and the wallet app (src/app: DApp Connector providers)
 docs/SPEC.md         every ledger field, guard, privacy invariant and accepted leak
 docs/diagrams/       Excalidraw sources (.excalidraw) and rendered PNGs
-scripts/             deploy, preprod-demo, receipt, stage-viewer, render-diagrams, compactc wrapper
+scripts/             deploy, preprod-demo, dev-wallet, receipt, stage-viewer, render-diagrams, compactc wrapper
 deployments/         public deploy records (preprod.json)
 deploy/viewer/       Dockerfile and railway.json for the hosted viewer
 ```

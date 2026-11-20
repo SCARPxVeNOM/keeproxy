@@ -40,6 +40,13 @@ export const NETWORK = (import.meta.env.VITE_KEEPROXY_NETWORK as string | undefi
 /** Where the public proving artifacts are served (keeproxy-viewer's /zk/ route). */
 const ZK_ORIGIN = ((import.meta.env.VITE_KEEPROXY_API as string | undefined) ?? '').replace(/\/$/, '');
 const ZK_BASE = `${ZK_ORIGIN}/zk/${__KEEPROXY_ZK_VERSION__}/`;
+/** The proving artifacts this build pins, fetched from the viewer. */
+export const zkProvider = () =>
+  new FetchZkConfigProvider<string>(ZK_BASE, {
+    expectedManifestHash: __KEEPROXY_ZK_VERSION__,
+    // Called as a method otherwise, which the browser refuses ("Illegal invocation").
+    fetchFunc: ((input, init) => globalThis.fetch(input as RequestInfo, init as RequestInit)) as typeof fetch,
+  });
 /** The connector API major this app is written against. */
 const API_MAJOR = '4.';
 
@@ -233,7 +240,7 @@ export class BrowserVault {
     const api = await initial.connect(NETWORK);
     const network = await dappConnectorNetwork(api);
     if (network.networkId !== NETWORK) throw new Error(`Switch ${choice.name} to ${NETWORK} (it is on ${network.networkId})`);
-    const zk = new FetchZkConfigProvider<string>(ZK_BASE, { expectedManifestHash: __KEEPROXY_ZK_VERSION__ });
+    const zk = zkProvider();
     const { walletProvider, midnightProvider } = await dappConnectorWalletProviders(api);
     const proofProvider = await dappConnectorProofProvider(api, zk, CostModel.initialCostModel());
     const providers = {

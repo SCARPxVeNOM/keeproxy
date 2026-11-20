@@ -27,6 +27,7 @@
     "setup:compactc": "bash scripts/setup-compactc.sh",
     "receipt": "vite-node scripts/receipt.ts",
     "demo": "vite-node scripts/preprod-demo.ts",
+    "dev-wallet": "vite-node scripts/dev-wallet.ts",
     "viewer": "vite-node server/viewer.ts",
     "diagrams": "node docs/diagrams/build.mjs && node scripts/render-diagrams.mjs"
   },

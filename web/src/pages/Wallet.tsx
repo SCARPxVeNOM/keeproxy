@@ -13,6 +13,9 @@ import {
   type WalletChoice,
 } from '../app/vault';
 import type { PublicView } from '../../../src/public-view';
+import { installDevWallet } from '../app/dev-wallet';
+
+installDevWallet();
 
 const API = ((import.meta.env.VITE_KEEPROXY_API as string | undefined) ?? '').replace(/\/$/, '');
 const FAUCET = 'https://faucet.preprod.midnight.network/';

@@ -117,7 +117,11 @@ export class MidnightWalletProvider implements Ledger9WalletProvider {
     handle: LedgerTransaction<'Unbound'>,
     ttl: Date = ttlOneHour(),
   ): Promise<TransactionAnswer> {
-    const tx = unboundFromHandle(handle);
+    return this.balanceUnbound(unboundFromHandle(handle), ttl);
+  }
+
+  /** Balances, signs and finalizes a proven ledger 9 transaction; the dev wallet bridge calls this with decoded bytes. */
+  async balanceUnbound(tx: UnboundTransaction, ttl: Date = ttlOneHour()): Promise<FinalizedTransaction> {
     const active = await this.activeProtocolVersion();
     const recipe = await this.wallet.balanceUnboundTransaction(
       WalletTransaction.adopt('Unbound', tx, active),
